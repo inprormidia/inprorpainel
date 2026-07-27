@@ -2,9 +2,9 @@ import { useLocation, useNavigate } from "react-router";
 
 const BOTTOM_NAV = [
   { path: "/",          label: "Home",     icon: "◎" },
+  { path: "/tarefas",   label: "Tarefas",  icon: "◑" },
+  { path: "/projetos",  label: "Projetos", icon: "▤" },
   { path: "/delivery",  label: "Delivery", icon: "◈" },
-  { path: "/trafego-pago", label: "Ads",  icon: "➚" },
-  { path: "/social",    label: "Social",   icon: "≋" },
 ];
 
 export default function MobileBottomNav({ onMenuOpen }: { onMenuOpen: () => void }) {

@@ -235,7 +235,7 @@ export default function Reputacao() {
         }
       >
         {/* Source chips */}
-        <div className="flex flex-wrap gap-2 mb-5">
+        <div className="filter-row mb-5">
           {SOURCES.map(s => (
             <button key={s.key} className="chip"
               style={src === s.key ? { background: s.color, color: "white", borderColor: s.color } : {}}
@@ -321,7 +321,7 @@ export default function Reputacao() {
         {/* Add form */}
         {showForm && (
           <SectionCard title="Adicionar Snapshot de Reputacao" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { k: "source" as const, label: "Plataforma", type: "select",
                   options: SOURCES.filter(s => s.key !== "todos").map(s => ({ v: s.key, l: s.label })) },

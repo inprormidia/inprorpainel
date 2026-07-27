@@ -141,7 +141,7 @@ html.dark {
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 3px 8px;
+    padding: 5px 10px;
     border-radius: 999px;
     border: 1px solid var(--line-light);
     background: transparent;
@@ -149,12 +149,46 @@ html.dark {
     align-items: center;
     gap: 6px;
     cursor: pointer;
+    /* nunca encolher nem quebrar dentro de uma faixa rolavel */
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  /* Faixa de filtros: rola na horizontal no mobile, quebra em linha no desktop */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px 2px;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+  @media (min-width: 640px) {
+    .filter-row {
+      flex-wrap: wrap;
+      overflow-x: visible;
+      margin-left: 0;
+      margin-right: 0;
+      padding: 0;
+    }
   }
   .chip:hover {
     background: rgba(0,0,0,.05);
   }
   html.dark .chip:hover {
     background: rgba(255,255,255,.06);
+  }
+  /* iOS aplica zoom ao focar campos com fonte menor que 16px */
+  @media (max-width: 639px) {
+    input, select, textarea {
+      font-size: 16px;
+    }
+    /* alvos de toque confortaveis no mobile */
+    .nav-item {
+      padding-top: 10px;
+      padding-bottom: 10px;
+    }
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); border-radius: 3px; }

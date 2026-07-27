@@ -301,7 +301,7 @@ export default function Projetos() {
         </KpiGrid>
 
         {/* Filtro por status */}
-        <div className="flex flex-wrap gap-2 mb-5">
+        <div className="filter-row mb-5">
           {STATUS.map(s => {
             const count = s.key === "todos"
               ? projects.length
@@ -320,7 +320,7 @@ export default function Projetos() {
         {/* Form */}
         {showForm && (
           <SectionCard title="Novo Projeto" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 col-span-2">
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Nome</span>
                 <input className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"

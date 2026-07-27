@@ -174,7 +174,7 @@ export default function Delivery() {
         }
       >
         {/* Platform chips */}
-        <div className="flex flex-wrap gap-2 mb-5">
+        <div className="filter-row mb-5">
           {PLATS.map(p => (
             <button key={p.key} className="chip"
               style={plat === p.key
@@ -240,7 +240,7 @@ export default function Delivery() {
         {/* Add form */}
         {showForm && (
           <SectionCard title="Adicionar Dados de Entrega" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { k: "platform" as const, label: "Plataforma", type: "select",
                   options: PLATS.filter(p => p.key !== "todos").map(p => ({ v: p.key, l: p.label })) },

@@ -246,7 +246,7 @@ export default function TrafegoPago() {
         {/* Add form */}
         {showForm && (
           <SectionCard title="Adicionar Dados de Anuncio" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1">
                 <span className="font-mono text-[10px] opacity-50 uppercase tracking-wider">Plataforma</span>
                 <select className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"

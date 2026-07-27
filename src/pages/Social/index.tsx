@@ -155,7 +155,7 @@ export default function Social() {
 
         {/* Controls */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
-          <div className="flex flex-wrap gap-2">
+          <div className="filter-row">
             {STATUS_LIST.map(s => (
               <button key={s.key} className="chip"
                 style={statusFilter === s.key
@@ -185,7 +185,7 @@ export default function Social() {
         {/* Add form */}
         {showForm && (
           <SectionCard title="Novo Conteudo" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <label className="col-span-2 flex flex-col gap-1">
                 <span className="font-mono text-[10px] opacity-50 uppercase tracking-wider">Titulo</span>
                 <input type="text"

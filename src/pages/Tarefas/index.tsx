@@ -255,32 +255,32 @@ export default function Tarefas() {
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-1 gap-2">
+        <div className="flex items-center justify-between pt-1 gap-2 border-t hairline mt-0.5">
           <button
-            className="text-[11px] px-2 py-0.5 rounded border hairline disabled:opacity-25"
+            className="text-sm w-9 h-8 flex items-center justify-center rounded border hairline disabled:opacity-25 shrink-0"
             disabled={idx === 0} onClick={() => move(t.id, -1)} aria-label="Voltar etapa"
           >‹</button>
 
           {confirming ? (
             <span className="flex items-center gap-1.5">
-              <button className="text-[10px] font-semibold px-2 py-0.5 rounded"
+              <button className="text-[11px] font-semibold px-2.5 py-1.5 rounded"
                 style={{ background: "var(--bad)", color: "white" }}
                 onClick={() => handleDelete(t.id)}>Excluir</button>
-              <button className="text-[10px] px-1.5 py-0.5 rounded border hairline"
+              <button className="text-[11px] px-2.5 py-1.5 rounded border hairline"
                 onClick={() => setConfirmId(null)}>Nao</button>
             </span>
           ) : (
-            <span className="flex items-center gap-2">
-              <button className="text-[10px] uppercase tracking-wide opacity-40 hover:opacity-80"
+            <span className="flex items-center gap-1">
+              <button className="text-[10px] uppercase tracking-wide opacity-45 hover:opacity-90 px-2.5 py-1.5"
                 onClick={() => openEdit(t)}>Editar</button>
-              <button className="text-[10px] uppercase tracking-wide opacity-40 hover:opacity-100"
+              <button className="text-[10px] uppercase tracking-wide opacity-45 hover:opacity-100 px-2.5 py-1.5"
                 style={{ color: "var(--bad)" }}
                 onClick={() => setConfirmId(t.id)}>Excluir</button>
             </span>
           )}
 
           <button
-            className="text-[11px] px-2 py-0.5 rounded border hairline disabled:opacity-25"
+            className="text-sm w-9 h-8 flex items-center justify-center rounded border hairline disabled:opacity-25 shrink-0"
             disabled={idx === COLUMNS.length - 1} onClick={() => move(t.id, 1)} aria-label="Avancar etapa"
           >›</button>
         </div>
@@ -361,7 +361,7 @@ export default function Tarefas() {
 
         {/* Filtro por projeto + view toggle */}
         <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
-          <div className="flex flex-wrap gap-2">
+          <div className="filter-row">
             <button className="chip"
               style={projFilter === "todos" ? { background: "var(--brand)", color: "white", borderColor: "var(--brand)" } : {}}
               onClick={() => setProjFilter("todos")}
@@ -404,7 +404,7 @@ export default function Tarefas() {
         {/* Form de criar / editar */}
         {showForm && (
           <SectionCard title={editingId ? "Editar Tarefa" : "Nova Tarefa"} className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 col-span-2">
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Titulo</span>
                 <input className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
@@ -485,11 +485,13 @@ export default function Tarefas() {
             />
           </SectionCard>
         ) : view === "kanban" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          // Mobile: colunas deslizam na horizontal, preservando a leitura de kanban
+          <div className="flex gap-3 overflow-x-auto -mx-4 px-4 pb-2 snap-x snap-mandatory
+                          md:grid md:grid-cols-2 xl:grid-cols-4 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0">
             {COLUMNS.map(col => {
               const colTasks = sortTasks(visible.filter(t => t.status === col.key));
               return (
-                <div key={col.key} className="flex flex-col gap-3">
+                <div key={col.key} className="flex flex-col gap-3 w-[82vw] shrink-0 snap-start md:w-auto md:shrink">
                   <div className="flex items-center justify-between px-1">
                     <span className="font-semibold text-[13px]" style={{ color: "var(--brand)" }}>{col.label}</span>
                     <span className="font-mono text-xs opacity-40">{colTasks.length}</span>
