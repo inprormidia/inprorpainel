@@ -17,6 +17,7 @@ import Reunioes   from "./pages/Reunioes";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
 import Tarefas    from "./pages/Tarefas";
+import TarefaDetalhe from "./pages/Tarefas/Detalhe";
 import Projetos   from "./pages/Projetos";
 import Estrategias from "./pages/Estrategias";
 import MetasKpis  from "./pages/MetasKpis";
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/cardapio"            element={<Cardapio />} />
           <Route path="/projetos"            element={<Projetos />} />
           <Route path="/tarefas"             element={<Tarefas />} />
+          <Route path="/tarefas/:id"         element={<TarefaDetalhe />} />
           <Route path="/estrategias"         element={<Estrategias />} />
           <Route path="/metas-kpis"          element={<MetasKpis />} />
           <Route path="/relatorios"          element={<Relatorios />} />
