@@ -1,0 +1,219 @@
+import { useLocation, useNavigate } from "react-router";
+import { useTheme } from "../context/ThemeContext";
+import { useAuth, useClientScope } from "../context/AuthContext";
+import { useMemo } from "react";
+
+function cls(...args: (string | boolean | undefined | null)[]) {
+  return args.filter(Boolean).join(" ");
+}
+
+const NAV_ADMIN = [
+  {
+    group: "Geral",
+    items: [
+      { path: "/",          label: "Dashboard",   icon: "◎" },
+      { path: "/clientes",  label: "Clientes",    icon: "☷" },
+      { path: "/projetos",  label: "Projetos",    icon: "▤" },
+      { path: "/tarefas",   label: "Tarefas",     icon: "◑" },
+    ],
+  },
+  {
+    group: "Estrategia",
+    items: [
+      { path: "/estrategias", label: "Estrategias", icon: "⬡" },
+      { path: "/metas-kpis",  label: "Metas & KPIs", icon: "◈" },
+    ],
+  },
+  {
+    group: "Delivery",
+    items: [
+      { path: "/delivery",   label: "Delivery",    icon: "◈" },
+      { path: "/reputacao",  label: "Reputacao",   icon: "★" },
+    ],
+  },
+  {
+    group: "Marketing",
+    items: [
+      { path: "/trafego-pago", label: "Trafego Pago", icon: "➚" },
+      { path: "/social",       label: "Redes Sociais", icon: "≋" },
+      { path: "/cardapio",     label: "Cardapio/Site", icon: "⌂" },
+    ],
+  },
+  {
+    group: "Operacao",
+    items: [
+      { path: "/relatorios", label: "Relatorios", icon: "≡" },
+      { path: "/financeiro", label: "Financeiro", icon: "$" },
+      { path: "/reunioes",   label: "Reunioes",   icon: "◐" },
+    ],
+  },
+];
+
+const NAV_CLIENT = [
+  {
+    group: "Minha Conta",
+    items: [
+      { path: "/",           label: "Dashboard",   icon: "◎", moduleKey: null },
+      { path: "/metas-kpis", label: "Metas & KPIs", icon: "◈", moduleKey: null },
+    ],
+  },
+  {
+    group: "Delivery",
+    items: [
+      { path: "/delivery",  label: "Delivery",   icon: "◈", moduleKey: "delivery" },
+      { path: "/reputacao", label: "Reputacao",  icon: "★", moduleKey: "reputacao" },
+    ],
+  },
+  {
+    group: "Marketing",
+    items: [
+      { path: "/trafego-pago", label: "Trafego Pago", icon: "➚", moduleKey: "trafego-pago" },
+      { path: "/social",       label: "Redes Sociais", icon: "≋", moduleKey: "social" },
+      { path: "/cardapio",     label: "Cardapio",      icon: "⌂", moduleKey: "cardapio" },
+    ],
+  },
+  {
+    group: "Operacao",
+    items: [
+      { path: "/projetos",   label: "Projetos",   icon: "▤", moduleKey: null },
+      { path: "/tarefas",    label: "Tarefas",    icon: "◑", moduleKey: null },
+      { path: "/relatorios", label: "Relatorios", icon: "≡", moduleKey: null },
+      { path: "/financeiro", label: "Financeiro", icon: "$", moduleKey: null },
+      { path: "/reunioes",   label: "Reunioes",   icon: "◐", moduleKey: null },
+    ],
+  },
+];
+
+interface AppSidebarProps {
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+}
+
+const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const { user, role, clientModules, signOut } = useAuth();
+  const { adminClientId, setAdminClientId, adminClients } = useClientScope();
+
+  const nav = useMemo(() => {
+    if (role === "admin") return NAV_ADMIN;
+    return NAV_CLIENT.map(group => ({
+      ...group,
+      items: group.items.filter(it =>
+        it.moduleKey === null ||
+        (clientModules !== null && clientModules.includes(it.moduleKey))
+      ),
+    }));
+  }, [role, clientModules]);
+
+  const displayName = (user?.user_metadata?.name as string) || user?.email?.split("@")[0] || "Usuario";
+  const initials = displayName.slice(0, 2).toUpperCase();
+  const roleLabel = role === "admin" ? "Admin" : "Cliente";
+
+  const isActive = (path: string) =>
+    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+
+  const handleNav = (path: string) => { navigate(path); setMobileOpen(false); };
+
+  const sidebarContent = (
+    <div className="w-56 flex flex-col h-full sidebar-brand">
+      {/* Logo */}
+      <div className="px-4 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center font-bold"
+          style={{ background: "var(--copper)", color: "white", fontSize: 18 }}>
+          R
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-display font-bold text-base leading-tight text-white">inProR</div>
+          <div className="font-mono text-[9px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+            Painel de Gestao
+          </div>
+        </div>
+        <button onClick={() => setMobileOpen(false)}
+          className="md:hidden w-6 h-6 flex items-center justify-center text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
+          ✕
+        </button>
+      </div>
+
+      {/* Global client filter - admin */}
+      {role === "admin" && adminClients.length > 0 && (
+        <div className="px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="nav-group-label mb-1.5">Contexto</div>
+          <select
+            value={adminClientId ?? ""}
+            onChange={e => setAdminClientId(e.target.value || null)}
+            className="w-full text-xs rounded px-2 py-1.5 font-medium focus:outline-none"
+            style={{ background: "rgba(255,255,255,0.08)", color: "white", border: "1px solid rgba(255,255,255,0.15)" }}
+          >
+            <option value="">Todos os clientes</option>
+            {adminClients.map(c => (
+              <option key={c.id} value={c.id} style={{ color: "#0F172A" }}>
+                {c.name}{!c.active ? " (inativo)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-3 space-y-3">
+        {nav.map(g => (
+          <div key={g.group}>
+            <div className="nav-group-label mb-1">{g.group}</div>
+            <div className="space-y-0.5 px-2">
+              {g.items.map(it => (
+                <button
+                  key={it.path}
+                  onClick={() => handleNav(it.path)}
+                  className={cls("nav-item", isActive(it.path) && "active")}
+                >
+                  <span className="font-mono text-xs w-3 text-center shrink-0" style={{ opacity: 0.6 }}>{it.icon}</span>
+                  <span>{it.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-3 py-3 flex items-center gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
+          style={{ background: "var(--copper)" }}>
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold truncate text-white capitalize">{displayName}</div>
+          <div className="font-mono text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>{roleLabel}</div>
+        </div>
+        <button onClick={() => signOut()}
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-opacity"
+          style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.5)" }}
+          title="Sair">
+          ⏻
+        </button>
+        <button onClick={toggleTheme}
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px]"
+          style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.5)" }}
+          title="Alternar tema">
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="hidden md:block h-screen sticky top-0 shrink-0">{sidebarContent}</div>
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <div className="relative h-full shadow-2xl">{sidebarContent}</div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default AppSidebar;

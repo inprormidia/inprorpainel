@@ -1,0 +1,212 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+@import "tailwindcss";
+
+/* Kenyan Coffee - fonte da marca inProR (copie os OTF de G:\...Identidade\TIPOGRAFIA\ para public/fonts/) */
+@font-face {
+  font-family: "Kenyan Coffee";
+  src: url("/fonts/kenyan coffee rg.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Kenyan Coffee";
+  src: url("/fonts/kenyan coffee bd.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-*: initial;
+  --font-sans: "Inter", sans-serif;
+  --font-display: "Kenyan Coffee", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  --color-current: currentColor;
+  --color-transparent: transparent;
+  --color-white: #ffffff;
+  --color-black: #0C2118;
+
+  --color-brand-50:  #e8f0ec;
+  --color-brand-100: #c3d9cb;
+  --color-brand-200: #9ac0a8;
+  --color-brand-300: #6da682;
+  --color-brand-400: #479464;
+  --color-brand-500: #0C2118;
+  --color-brand-600: #0a1d15;
+  --color-brand-700: #081811;
+  --color-brand-800: #06130e;
+  --color-brand-900: #040e09;
+
+  --color-copper-50:  #faf0e8;
+  --color-copper-100: #f2d9c3;
+  --color-copper-200: #e9bf9a;
+  --color-copper-300: #dea36d;
+  --color-copper-400: #d38d47;
+  --color-copper-500: #A85730;
+  --color-copper-600: #8f4a28;
+  --color-copper-700: #733c20;
+  --color-copper-800: #572e18;
+  --color-copper-900: #3c2010;
+
+  --color-gray-50:  #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+
+  --color-success-500: #12b76a;
+  --color-error-500:   #f04438;
+  --color-warning-500: #f79009;
+
+  --shadow-sm: 0px 1px 2px 0px rgba(16,24,40,0.05);
+  --shadow-md: 0px 4px 8px -2px rgba(16,24,40,0.1), 0px 2px 4px -2px rgba(16,24,40,0.06);
+  --shadow-lg: 0px 12px 16px -4px rgba(16,24,40,0.08), 0px 4px 6px -2px rgba(16,24,40,0.03);
+}
+
+/* ── inProR Design System ───────────────────────────────────── */
+:root {
+  --ink:        #0F172A;
+  --paper:      #f5f6fa;
+  --paper-2:    #ebedf5;
+  --line-light: #dde0ed;
+  --brand:      #0C2118;
+  --brand-hover:#1a3d2b;
+  --copper:     #A85730;
+  --ok:         #087443;
+  --warn:       #b15a0c;
+  --bad:        #b3261e;
+}
+html.dark {
+  --ink:        #e9e6de;
+  --paper:      #0c0e14;
+  --paper-2:    #13162a;
+  --line-light: #1e2235;
+  --ok:         #34d399;
+  --warn:       #fbbf24;
+  --bad:        #f87171;
+}
+
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--line-light, currentColor);
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", sans-serif;
+  }
+  body {
+    position: relative;
+    font-weight: 400;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Kenyan Coffee", "Inter", sans-serif;
+    letter-spacing: 0.01em;
+  }
+  .font-mono, code, .metric {
+    font-family: "JetBrains Mono", monospace;
+  }
+  .font-display {
+    font-family: "Kenyan Coffee", "Inter", sans-serif;
+    letter-spacing: 0.01em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .hairline {
+    border-color: var(--line-light);
+  }
+  .chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line-light);
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .chip:hover {
+    background: rgba(0,0,0,.05);
+  }
+  html.dark .chip:hover {
+    background: rgba(255,255,255,.06);
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); border-radius: 3px; }
+  html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); }
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23000' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 26px;
+    background-size: 14px;
+  }
+  html.dark select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23e9e6de' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  }
+}
+
+/* Sidebar brand styles */
+.sidebar-brand {
+  background: var(--brand);
+  color: white;
+}
+.sidebar-brand .nav-item {
+  color: rgba(255,255,255,0.7);
+  border-radius: 6px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.sidebar-brand .nav-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+.sidebar-brand .nav-item.active {
+  background: var(--copper);
+  color: white;
+}
+.sidebar-brand .nav-group-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255,255,255,0.3);
+  padding: 0 12px;
+  margin-bottom: 4px;
+}
