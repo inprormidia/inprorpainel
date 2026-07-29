@@ -6,9 +6,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       {/* Left panel - brand */}
       <div className="hidden lg:flex w-1/2 flex-col justify-between p-12"
         style={{ background: "var(--brand)", color: "white" }}>
-        <div>
-          <div className="font-display font-bold text-4xl mb-2" style={{ color: "white" }}>inProR</div>
-          <div className="font-mono text-sm opacity-50 uppercase tracking-widest">Midia</div>
+        <div className="flex items-center gap-4">
+          <img src="/logo-inpror-branca.png" alt="" aria-hidden="true" width={56} height={56}
+            className="w-14 h-14 object-contain" />
+          <div>
+            <div className="font-display font-bold text-4xl" style={{ color: "white" }}>inProR</div>
+            <div className="font-mono text-sm opacity-50 uppercase tracking-widest">Midia</div>
+          </div>
         </div>
         <div>
           <p className="font-display text-2xl font-bold leading-snug mb-4" style={{ color: "white" }}>

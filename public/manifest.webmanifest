@@ -1,0 +1,36 @@
+{
+  "name": "inProR Painel",
+  "short_name": "inProR",
+  "description": "Painel de gestao da inProR Midia: delivery, reputacao, trafego pago, conteudo, projetos e tarefas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f6fa",
+  "theme_color": "#0C2118",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Tarefas",  "url": "/tarefas" },
+    { "name": "Projetos", "url": "/projetos" }
+  ]
+}

@@ -36,8 +36,11 @@ const AppLayout: React.FC = () => {
             paddingTop: "max(10px, env(safe-area-inset-top))",
             paddingBottom: "10px",
           }}>
-          <div className="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center font-bold text-white text-xs"
-            style={{ background: "var(--brand)" }}>R</div>
+          {/* verde no tema claro, branca no escuro */}
+          <img src="/logo-inpror.png" alt="inProR" width={28} height={28}
+            className="w-7 h-7 shrink-0 object-contain dark:hidden" />
+          <img src="/logo-inpror-branca.png" alt="" aria-hidden="true" width={28} height={28}
+            className="w-7 h-7 shrink-0 object-contain hidden dark:block" />
           <span className="font-display text-sm font-bold flex-1 truncate" style={{ color: "var(--brand)" }}>
             {pageTitle}
           </span>

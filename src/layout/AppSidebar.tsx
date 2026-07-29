@@ -120,10 +120,9 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
     <div className="w-56 flex flex-col h-full sidebar-brand">
       {/* Logo */}
       <div className="px-4 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-        <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center font-bold"
-          style={{ background: "var(--copper)", color: "white", fontSize: 18 }}>
-          R
-        </div>
+        {/* sidebar tem fundo verde escuro, por isso a logo branca */}
+        <img src="/logo-inpror-branca.png" alt="inProR" width={36} height={36}
+          className="w-9 h-9 shrink-0 object-contain" />
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-base leading-tight text-white">inProR</div>
           <div className="font-mono text-[9px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
