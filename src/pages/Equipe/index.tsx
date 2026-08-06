@@ -30,6 +30,7 @@ export default function Equipe() {
   const { authLoading, team, reloadTeam, myMemberId } = useClientScope();
 
   const [tasks, setTasks]   = useState<TaskRow[]>([]);
+  const [assignees, setAssignees] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro]     = useState<string | null>(null);
 
@@ -41,14 +42,21 @@ export default function Equipe() {
 
   useEffect(() => {
     if (authLoading) return;
-    supabase.from("tasks").select("*").then(({ data }) => {
-      setTasks((data as TaskRow[]) ?? []);
+    Promise.all([
+      supabase.from("tasks").select("*"),
+      supabase.from("task_assignees").select("task_id,member_id"),
+    ]).then(([t, a]) => {
+      setTasks((t.data as TaskRow[]) ?? []);
+      const map: Record<string, string[]> = {};
+      ((a.data as { task_id: string; member_id: string }[]) ?? [])
+        .forEach(r => { (map[r.task_id] ??= []).push(r.member_id); });
+      setAssignees(map);
       setLoading(false);
     });
   }, [authLoading]);
 
   const statsFor = (memberId: string) => {
-    const mine = tasks.filter(t => t.assignee_id === memberId);
+    const mine = tasks.filter(t => (assignees[t.id] ?? []).includes(memberId));
     const abertas = mine.filter(t => t.status !== "concluida");
     return {
       total: mine.length,
@@ -58,7 +66,7 @@ export default function Equipe() {
     };
   };
 
-  const semDono = tasks.filter(t => t.status !== "concluida" && !t.assignee_id).length;
+  const semDono = tasks.filter(t => t.status !== "concluida" && !(assignees[t.id] ?? []).length).length;
   const ativos  = team.filter(m => m.active).length;
 
   function openNew() {
@@ -107,7 +115,8 @@ export default function Equipe() {
     if (error) { setErro("Nao foi possivel remover: " + error.message); return; }
     await reloadTeam();
     if (s.abertas > 0) {
-      setTasks(cur => cur.map(t => t.assignee_id === id ? { ...t, assignee_id: null } : t));
+      setAssignees(cur => Object.fromEntries(
+        Object.entries(cur).map(([k, v]) => [k, v.filter(x => x !== id)])));
     }
   }
 

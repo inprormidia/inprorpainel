@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
-  SectionCard, Badge, Btn, StatusDot, EmptyState, Avatar,
+  SectionCard, Badge, Btn, StatusDot, EmptyState, AvatarStack, AssigneePicker,
 } from "../../components/ui/InprorComponents";
 import { useClientScope } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
@@ -23,6 +23,7 @@ export default function TarefaDetalhe() {
   const [notFound, setNotFound] = useState(false);
   const [erro, setErro]         = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [assignees, setAssignees] = useState<string[]>([]);
 
   // Rascunhos dos campos de texto (salvos ao sair do campo)
   const [titleDraft, setTitleDraft] = useState("");
@@ -36,13 +37,15 @@ export default function TarefaDetalhe() {
     Promise.all([
       supabase.from("tasks").select("*").eq("id", id).maybeSingle(),
       supabase.from("projects").select("id,name,client_id"),
-    ]).then(([t, p]) => {
+      supabase.from("task_assignees").select("member_id").eq("task_id", id),
+    ]).then(([t, p, a]) => {
       if (!t.data) { setNotFound(true); setLoading(false); return; }
       const row = t.data as TaskRow;
       setTask(row);
       setTitleDraft(row.title);
       setDescDraft(row.description ?? "");
       setProjects((p.data as ProjectLite[]) ?? []);
+      setAssignees(((a.data as { member_id: string }[]) ?? []).map(r => r.member_id));
       setLoading(false);
     });
   }, [id, authLoading]);
@@ -81,6 +84,23 @@ export default function TarefaDetalhe() {
     setDirty(d => ({ ...d, desc: false }));
   }
 
+  // adiciona ou remove uma pessoa da tarefa
+  async function toggleAssignee(memberId: string) {
+    if (!task) return;
+    const on = assignees.includes(memberId);
+    const backup = assignees;
+    setAssignees(cur => on ? cur.filter(x => x !== memberId) : [...cur, memberId]);
+    const { error } = on
+      ? await supabase.from("task_assignees").delete()
+          .eq("task_id", task.id).eq("member_id", memberId)
+      : await supabase.from("task_assignees")
+          .insert({ task_id: task.id, member_id: memberId });
+    if (error) {
+      setAssignees(backup);
+      setErro("Nao foi possivel alterar os responsaveis.");
+    }
+  }
+
   async function handleDelete() {
     if (!task) return;
     const { error } = await supabase.from("tasks").delete().eq("id", task.id);
@@ -115,7 +135,7 @@ export default function TarefaDetalhe() {
   const done = task.status === "concluida";
   const overdue = isOverdue(task);
   const project = projects.find(p => p.id === task.project_id);
-  const assignee = task.assignee_id ? team.find(m => m.id === task.assignee_id) : undefined;
+  const assigneePeople = assignees.map(id => team.find(m => m.id === id)).filter(Boolean) as typeof team;
   const clientLabel = task.client_id
     ? (adminClients.find(c => c.id === task.client_id)?.name ?? "Cliente")
     : "Interno (agencia)";
@@ -298,27 +318,23 @@ export default function TarefaDetalhe() {
                 )}
               </Field>
 
-              <Field label="Responsavel">
-                <div className="flex items-center gap-2">
-                  <select className={selectCls} value={task.assignee_id ?? ""}
-                    onChange={e => patch({ assignee_id: e.target.value || null })}>
-                    <option value="">Sem responsavel</option>
-                    {team.filter(m => m.active || m.id === task.assignee_id).map(m =>
-                      <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  {assignee && <Avatar name={assignee.name} color={assignee.color} size={28} />}
+              <Field label="Responsaveis">
+                <div className="mb-2">
+                  <AvatarStack people={assigneePeople} size={26} max={5} />
                 </div>
-                {assignee?.role_title && (
-                  <span className="text-[11px] opacity-50 mt-1">{assignee.role_title}</span>
+                <AssigneePicker
+                  people={team.filter(m => m.active || assignees.includes(m.id))}
+                  selected={assignees}
+                  onToggle={toggleAssignee}
+                  emptyHint="Cadastre a equipe em Equipe para poder atribuir." />
+                {!assignees.length && task.assigned_to && (
+                  <span className="text-[11px] opacity-45 mt-1.5">Registro anterior: {task.assigned_to}</span>
                 )}
-                {!assignee && task.assigned_to && (
-                  <span className="text-[11px] opacity-45 mt-1">Registro anterior: {task.assigned_to}</span>
-                )}
-                {myMemberId && task.assignee_id !== myMemberId && (
-                  <button className="text-[12px] mt-1.5 text-left underline underline-offset-2 w-fit"
+                {myMemberId && !assignees.includes(myMemberId) && (
+                  <button className="text-[12px] mt-2 text-left underline underline-offset-2 w-fit"
                     style={{ color: "var(--copper)" }}
-                    onClick={() => patch({ assignee_id: myMemberId })}>
-                    Atribuir a mim
+                    onClick={() => toggleAssignee(myMemberId)}>
+                    Incluir a mim
                   </button>
                 )}
               </Field>

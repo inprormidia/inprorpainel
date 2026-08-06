@@ -153,6 +153,67 @@ export function Avatar({ name, color, size = 28, title }: {
   );
 }
 
+// ── AvatarStack ────────────────────────────────────────────────
+// Varios responsaveis em sequencia, com sobreposicao leve.
+export function AvatarStack({ people, size = 22, max = 3, empty = "Sem responsavel" }: {
+  people: { id: string; name: string; color?: string | null }[];
+  size?: number; max?: number; empty?: string;
+}) {
+  if (!people.length)
+    return <span className="text-[11px] opacity-35">{empty}</span>;
+
+  const shown = people.slice(0, max);
+  const rest  = people.length - shown.length;
+  return (
+    <span className="inline-flex items-center" title={people.map(p => p.name).join(", ")}>
+      {shown.map((p, i) => (
+        <span key={p.id} style={{ marginLeft: i === 0 ? 0 : -size * 0.28, zIndex: shown.length - i }}
+          className="inline-flex rounded-full" >
+          <span style={{ boxShadow: "0 0 0 1.5px var(--paper)", borderRadius: 999, display: "inline-flex" }}>
+            <Avatar name={p.name} color={p.color} size={size} title={p.name} />
+          </span>
+        </span>
+      ))}
+      {rest > 0 && (
+        <span className="ml-1 text-[10px] opacity-50 font-medium">+{rest}</span>
+      )}
+    </span>
+  );
+}
+
+// ── AssigneePicker ─────────────────────────────────────────────
+// Selecao de varias pessoas. Chips funcionam melhor que multi-select no celular.
+export function AssigneePicker({ people, selected, onToggle, emptyHint }: {
+  people: { id: string; name: string; color?: string | null; role_title?: string | null }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  emptyHint?: string;
+}) {
+  if (!people.length)
+    return <p className="text-[12px] opacity-45">{emptyHint ?? "Nenhum membro cadastrado ainda."}</p>;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {people.map(p => {
+        const on = selected.includes(p.id);
+        return (
+          <button key={p.id} type="button" onClick={() => onToggle(p.id)}
+            className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full border transition-colors text-[12px]"
+            style={on
+              ? { background: "var(--brand)", color: "white", borderColor: "var(--brand)" }
+              : { borderColor: "var(--line-light)" }}
+            title={p.role_title ?? p.name}
+            aria-pressed={on}
+          >
+            <Avatar name={p.name} color={on ? "rgba(255,255,255,.25)" : p.color} size={20} />
+            {p.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── StatusDot ──────────────────────────────────────────────────
 export function StatusDot({ status }: { status: "ok" | "warn" | "bad" | "neutral" }) {
   const colors: Record<string, string> = {

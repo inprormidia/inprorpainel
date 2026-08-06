@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, ReactNode } from "react";
 import { useNavigate } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
-  PageWrap, KpiCard, KpiGrid, SectionCard, Badge, Btn, StatusDot, EmptyState, Avatar, cls,
+  PageWrap, KpiCard, KpiGrid, SectionCard, Badge, Btn, StatusDot, EmptyState,
+  Avatar, AvatarStack, AssigneePicker, cls,
 } from "../../components/ui/InprorComponents";
 import { useClientScope } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
@@ -16,9 +17,12 @@ import {
 const emptyForm = () => ({
   title: "", description: "",
   status: "backlog" as Status, priority: "media" as Priority,
-  due_date: "", assignee_id: "", project_id: "", client_id: "",
+  due_date: "", project_id: "", client_id: "",
 });
 type FormShape = ReturnType<typeof emptyForm>;
+
+// task_id -> ids dos membros responsaveis
+type AssigneeMap = Record<string, string[]>;
 
 export default function Tarefas() {
   const navigate = useNavigate();
@@ -29,6 +33,8 @@ export default function Tarefas() {
 
   const [tasks, setTasks]       = useState<TaskRow[]>([]);
   const [projects, setProjects] = useState<ProjectLite[]>([]);
+  const [assignees, setAssignees] = useState<AssigneeMap>({});
+  const [formAssignees, setFormAssignees] = useState<string[]>([]);
   const [loading, setLoading]   = useState(true);
   const [erro, setErro]         = useState<string | null>(null);
 
@@ -50,8 +56,14 @@ export default function Tarefas() {
   const projectName = (id: string | null) =>
     id ? (projects.find(p => p.id === id)?.name ?? "Projeto") : null;
   const member = (id: string | null) => (id ? team.find(m => m.id === id) : undefined);
-  // tarefas antigas guardam so o texto; o membro vinculado tem prioridade
-  const assigneeName = (t: TaskRow) => member(t.assignee_id)?.name ?? t.assigned_to ?? null;
+  // uma tarefa pode ter varias pessoas; a lista vem de task_assignees
+  const peopleOf = (taskId: string) =>
+    (assignees[taskId] ?? []).map(id => team.find(m => m.id === id)).filter(Boolean) as typeof team;
+  const assigneeName = (t: TaskRow) => {
+    const names = peopleOf(t.id).map(m => m.name);
+    return names.length ? names.join(", ") : (t.assigned_to ?? null);
+  };
+  const hasAssignee = (t: TaskRow, memberId: string) => (assignees[t.id] ?? []).includes(memberId);
 
   useEffect(() => {
     if (authLoading) return;
@@ -63,11 +75,16 @@ export default function Tarefas() {
     } else if (isAdmin && adminClientId) {
       q = q.eq("client_id", adminClientId); pq = pq.eq("client_id", adminClientId);
     }
-    Promise.all([q, pq]).then(([t, p]) => {
-      setTasks((t.data as TaskRow[]) ?? []);
-      setProjects((p.data as ProjectLite[]) ?? []);
-      setLoading(false);
-    });
+    Promise.all([q, pq, supabase.from("task_assignees").select("task_id,member_id")])
+      .then(([t, p, a]) => {
+        setTasks((t.data as TaskRow[]) ?? []);
+        setProjects((p.data as ProjectLite[]) ?? []);
+        const map: AssigneeMap = {};
+        ((a.data as { task_id: string; member_id: string }[]) ?? [])
+          .forEach(r => { (map[r.task_id] ??= []).push(r.member_id); });
+        setAssignees(map);
+        setLoading(false);
+      });
   }, [scopedClientId, adminClientId, isAdmin, authLoading]);
 
   // ── Filtros ──────────────────────────────────────────────────
@@ -82,14 +99,15 @@ export default function Tarefas() {
       if (f.project !== "todos" && f.project !== "sem" && t.project_id !== f.project) return false;
       if (f.client === "interno" && t.client_id) return false;
       if (f.client !== "todos" && f.client !== "interno" && t.client_id !== f.client) return false;
-      if (f.assigned === "sem" && (t.assignee_id || t.assigned_to)) return false;
-      if (f.assigned === "eu" && t.assignee_id !== myMemberId) return false;
-      if (!["todos", "sem", "eu"].includes(f.assigned) && t.assignee_id !== f.assigned) return false;
+      const people = assignees[t.id] ?? [];
+      if (f.assigned === "sem" && people.length) return false;
+      if (f.assigned === "eu" && !(myMemberId && people.includes(myMemberId))) return false;
+      if (!["todos", "sem", "eu"].includes(f.assigned) && !people.includes(f.assigned)) return false;
       if (f.overdue && !isOverdue(t)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, view.filters, team, myMemberId]);
+  }, [tasks, view.filters, team, myMemberId, assignees]);
 
   // ── Ordenacao ────────────────────────────────────────────────
   const sortValue = (t: TaskRow, key: ColKey): string | number => {
@@ -114,7 +132,7 @@ export default function Tarefas() {
       return a.title.localeCompare(b.title);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, view.sortBy, view.sortDir, projects, adminClients, team]);
+  }, [filtered, view.sortBy, view.sortDir, projects, adminClients, team, assignees]);
 
   // ── Agrupamento ──────────────────────────────────────────────
   const groups = useMemo(() => {
@@ -128,7 +146,16 @@ export default function Tarefas() {
         case "priority":    key = t.priority; label = PRIO[t.priority].label; order = PRIO_ORDER[t.priority]; break;
         case "project":     key = t.project_id ?? "sem"; label = projectName(t.project_id) ?? "Sem projeto"; order = t.project_id ? 0 : 1; break;
         case "client":      key = t.client_id ?? "interno"; label = clientName(t.client_id); order = 0; break;
-        case "assigned_to": key = t.assignee_id ?? "sem"; label = assigneeName(t) ?? "Sem responsavel"; order = t.assignee_id ? 0 : 1; break;
+        case "assigned_to": {
+          const ppl = peopleOf(t.id);
+          if (!ppl.length) { key = "sem"; label = "Sem responsavel"; order = 1; break; }
+          // com varias pessoas a tarefa entra no grupo de cada uma
+          ppl.forEach(m => {
+            if (!map.has(m.id)) map.set(m.id, { key: m.id, label: m.name, items: [], order: 0 });
+            map.get(m.id)!.items.push(t);
+          });
+          return;
+        }
         default:            key = "all"; label = "";
       }
       if (!map.has(key)) map.set(key, { key, label, items: [], order });
@@ -136,13 +163,13 @@ export default function Tarefas() {
     });
     return [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorted, view.groupBy, projects, adminClients, team]);
+  }, [sorted, view.groupBy, projects, adminClients, team, assignees]);
 
   // ── Carga por membro (cards da equipe) ───────────────────────
   const workload = useMemo(() => {
     const base = tasks.filter(t => t.status !== "concluida");
     return team.filter(m => m.active).map(m => {
-      const mine = base.filter(t => t.assignee_id === m.id);
+      const mine = base.filter(t => (assignees[t.id] ?? []).includes(m.id));
       return {
         member: m,
         abertas: mine.length,
@@ -150,9 +177,9 @@ export default function Tarefas() {
         andamento: mine.filter(t => t.status === "em_andamento").length,
       };
     }).sort((a, b) => b.abertas - a.abertas);
-  }, [tasks, team]);
+  }, [tasks, team, assignees]);
 
-  const semDono = tasks.filter(t => t.status !== "concluida" && !t.assignee_id).length;
+  const semDono = tasks.filter(t => t.status !== "concluida" && !(assignees[t.id] ?? []).length).length;
 
   const total     = filtered.length;
   const andamento = filtered.filter(t => t.status === "em_andamento").length;
@@ -175,8 +202,25 @@ export default function Tarefas() {
   const setStatus = (id: string, s: Status) =>
     patchTask(id, { status: s }, "Nao foi possivel alterar a etapa.");
 
-  const setAssignee = (id: string, memberId: string) =>
-    patchTask(id, { assignee_id: memberId || null }, "Nao foi possivel alterar o responsavel.");
+  // regrava a lista inteira de responsaveis da tarefa
+  async function saveAssignees(taskId: string, memberIds: string[]) {
+    const backup = assignees[taskId] ?? [];
+    setAssignees(cur => ({ ...cur, [taskId]: memberIds }));
+    const del = await supabase.from("task_assignees").delete().eq("task_id", taskId);
+    if (del.error) {
+      setAssignees(cur => ({ ...cur, [taskId]: backup }));
+      setErro("Nao foi possivel alterar os responsaveis.");
+      return;
+    }
+    if (memberIds.length) {
+      const ins = await supabase.from("task_assignees")
+        .insert(memberIds.map(member_id => ({ task_id: taskId, member_id })));
+      if (ins.error) {
+        setAssignees(cur => ({ ...cur, [taskId]: backup }));
+        setErro("Nao foi possivel alterar os responsaveis.");
+      }
+    }
+  }
 
   function toggleDone(t: TaskRow) {
     setStatus(t.id, t.status === "concluida" ? "em_andamento" : "concluida");
@@ -195,7 +239,6 @@ export default function Tarefas() {
     const { data, error } = await supabase.from("tasks").insert({
       client_id: form.client_id || null,
       project_id: form.project_id || null,
-      assignee_id: form.assignee_id || null,
       title: form.title.trim(),
       description: form.description.trim() || null,
       status: form.status, priority: form.priority,
@@ -203,9 +246,16 @@ export default function Tarefas() {
     }).select().single();
     setSaving(false);
     if (error) { setErro("Erro ao criar: " + error.message); return; }
-    setTasks(cur => [data as TaskRow, ...cur]);
+    const nova = data as TaskRow;
+    if (formAssignees.length) {
+      await supabase.from("task_assignees")
+        .insert(formAssignees.map(member_id => ({ task_id: nova.id, member_id })));
+      setAssignees(cur => ({ ...cur, [nova.id]: formAssignees }));
+    }
+    setTasks(cur => [nova, ...cur]);
     setShowForm(false);
     setForm(emptyForm());
+    setFormAssignees([]);
   }
 
   const f = (k: keyof FormShape) =>
@@ -269,21 +319,14 @@ export default function Tarefas() {
         return projectName(t.project_id) ?? <span className="opacity-30">-</span>;
       case "client":
         return clientName(t.client_id);
-      case "assigned_to": {
-        const m = member(t.assignee_id);
+      case "assigned_to":
         return (
-          <select
-            className="text-[11px] border hairline rounded px-1.5 py-0.5 bg-white dark:bg-[#11141b] max-w-[150px]"
-            value={t.assignee_id ?? ""}
-            onChange={e => setAssignee(t.id, e.target.value)}
-            title={m?.name ?? "Sem responsavel"}
-          >
-            <option value="">Sem responsavel</option>
-            {team.filter(x => x.active || x.id === t.assignee_id).map(x =>
-              <option key={x.id} value={x.id}>{x.name}</option>)}
-          </select>
+          <button onClick={() => navigate(`/tarefas/${t.id}`)}
+            className="inline-flex items-center gap-1.5 hover:opacity-80"
+            title="Abrir a tarefa para alterar os responsaveis">
+            <AvatarStack people={peopleOf(t.id)} size={22} />
+          </button>
         );
-      }
       case "due_date":
         return t.due_date
           ? <span style={isOverdue(t) ? { color: "var(--bad)", fontWeight: 600 } : {}}>
@@ -318,8 +361,8 @@ export default function Tarefas() {
               setForm({
                 ...emptyForm(),
                 client_id: isAdmin ? (adminClientId ?? "") : (scopedClientId ?? ""),
-                assignee_id: myMemberId ?? "",
               });
+              setFormAssignees(myMemberId ? [myMemberId] : []);
               setShowForm(v => !v);
             }}>
               {showForm ? "Fechar" : "+ Nova tarefa"}
@@ -599,14 +642,17 @@ export default function Tarefas() {
                 <input className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                   value={form.title} onChange={f("title")} placeholder="Descreva a tarefa" autoFocus />
               </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] opacity-55 uppercase tracking-wide">Responsavel</span>
-                <select className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
-                  value={form.assignee_id} onChange={f("assignee_id")}>
-                  <option value="">Sem responsavel</option>
-                  {team.filter(m => m.active).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </label>
+              <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-4">
+                <span className="text-[11px] opacity-55 uppercase tracking-wide">
+                  Responsaveis {formAssignees.length > 0 && <span className="opacity-70">({formAssignees.length})</span>}
+                </span>
+                <AssigneePicker
+                  people={team.filter(m => m.active)}
+                  selected={formAssignees}
+                  onToggle={id => setFormAssignees(cur =>
+                    cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id])}
+                  emptyHint="Cadastre a equipe em Equipe para poder atribuir." />
+              </div>
               {isAdmin && (
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] opacity-55 uppercase tracking-wide">Cliente</span>
@@ -691,7 +737,6 @@ export default function Tarefas() {
                   <div className="flex flex-col gap-3 min-h-[60px]">
                     {colTasks.map(t => {
                       const idx = colIndex(t.status);
-                      const m = member(t.assignee_id);
                       return (
                         <div key={t.id} className="border hairline rounded-lg p-3 bg-white dark:bg-[#11141b] shadow-sm flex flex-col gap-2">
                           <div className="flex items-start justify-between gap-2">
@@ -706,11 +751,7 @@ export default function Tarefas() {
                             </span>
                           )}
                           <div className="flex items-center gap-2 flex-wrap text-[11px] opacity-60">
-                            {m
-                              ? <span className="inline-flex items-center gap-1.5">
-                                  <Avatar name={m.name} color={m.color} size={18} />{m.name}
-                                </span>
-                              : <span className="opacity-60">Sem responsavel</span>}
+                            <AvatarStack people={peopleOf(t.id)} size={18} max={4} />
                             {isAdmin && (
                               <span className="inline-flex items-center gap-1">
                                 <StatusDot status="neutral" />{clientName(t.client_id)}
