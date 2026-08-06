@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, ReactNode } from "react";
 import { useNavigate } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
-  PageWrap, KpiCard, KpiGrid, SectionCard, Badge, Btn, StatusDot, EmptyState, cls,
+  PageWrap, KpiCard, KpiGrid, SectionCard, Badge, Btn, StatusDot, EmptyState, Avatar, cls,
 } from "../../components/ui/InprorComponents";
 import { useClientScope } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
@@ -16,13 +16,16 @@ import {
 const emptyForm = () => ({
   title: "", description: "",
   status: "backlog" as Status, priority: "media" as Priority,
-  due_date: "", assigned_to: "", project_id: "", client_id: "",
+  due_date: "", assignee_id: "", project_id: "", client_id: "",
 });
 type FormShape = ReturnType<typeof emptyForm>;
 
 export default function Tarefas() {
   const navigate = useNavigate();
-  const { scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const {
+    scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients,
+    team, myMemberId,
+  } = useClientScope();
 
   const [tasks, setTasks]       = useState<TaskRow[]>([]);
   const [projects, setProjects] = useState<ProjectLite[]>([]);
@@ -38,7 +41,7 @@ export default function Tarefas() {
 
   useEffect(() => { saveView(view); }, [view]);
 
-  const upd = (patch: Partial<ViewConfig>) => setView(v => ({ ...v, ...patch }));
+  const upd  = (patch: Partial<ViewConfig>) => setView(v => ({ ...v, ...patch }));
   const updF = (patch: Partial<ViewConfig["filters"]>) =>
     setView(v => ({ ...v, filters: { ...v.filters, ...patch } }));
 
@@ -46,6 +49,9 @@ export default function Tarefas() {
     id ? (adminClients.find(c => c.id === id)?.name ?? "Cliente") : "Interno";
   const projectName = (id: string | null) =>
     id ? (projects.find(p => p.id === id)?.name ?? "Projeto") : null;
+  const member = (id: string | null) => (id ? team.find(m => m.id === id) : undefined);
+  // tarefas antigas guardam so o texto; o membro vinculado tem prioridade
+  const assigneeName = (t: TaskRow) => member(t.assignee_id)?.name ?? t.assigned_to ?? null;
 
   useEffect(() => {
     if (authLoading) return;
@@ -69,19 +75,21 @@ export default function Tarefas() {
     const f = view.filters;
     const term = f.search.trim().toLowerCase();
     return tasks.filter(t => {
-      if (term && !(`${t.title} ${t.description ?? ""} ${t.assigned_to ?? ""}`.toLowerCase().includes(term))) return false;
+      if (term && !(`${t.title} ${t.description ?? ""} ${assigneeName(t) ?? ""}`.toLowerCase().includes(term))) return false;
       if (f.status.length && !f.status.includes(t.status)) return false;
       if (f.priority.length && !f.priority.includes(t.priority)) return false;
       if (f.project === "sem" && t.project_id) return false;
       if (f.project !== "todos" && f.project !== "sem" && t.project_id !== f.project) return false;
       if (f.client === "interno" && t.client_id) return false;
       if (f.client !== "todos" && f.client !== "interno" && t.client_id !== f.client) return false;
-      if (f.assigned === "sem" && t.assigned_to) return false;
-      if (f.assigned !== "todos" && f.assigned !== "sem" && t.assigned_to !== f.assigned) return false;
+      if (f.assigned === "sem" && (t.assignee_id || t.assigned_to)) return false;
+      if (f.assigned === "eu" && t.assignee_id !== myMemberId) return false;
+      if (!["todos", "sem", "eu"].includes(f.assigned) && t.assignee_id !== f.assigned) return false;
       if (f.overdue && !isOverdue(t)) return false;
       return true;
     });
-  }, [tasks, view.filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, view.filters, team, myMemberId]);
 
   // ── Ordenacao ────────────────────────────────────────────────
   const sortValue = (t: TaskRow, key: ColKey): string | number => {
@@ -91,7 +99,7 @@ export default function Tarefas() {
       case "priority":    return PRIO_ORDER[t.priority];
       case "project":     return (projectName(t.project_id) ?? "￿").toLowerCase();
       case "client":      return clientName(t.client_id).toLowerCase();
-      case "assigned_to": return (t.assigned_to ?? "￿").toLowerCase();
+      case "assigned_to": return (assigneeName(t) ?? "￿").toLowerCase();
       case "due_date":    return t.due_date ?? "9999-99-99";
       case "created_at":  return t.created_at;
     }
@@ -106,7 +114,7 @@ export default function Tarefas() {
       return a.title.localeCompare(b.title);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, view.sortBy, view.sortDir, projects, adminClients]);
+  }, [filtered, view.sortBy, view.sortDir, projects, adminClients, team]);
 
   // ── Agrupamento ──────────────────────────────────────────────
   const groups = useMemo(() => {
@@ -120,7 +128,7 @@ export default function Tarefas() {
         case "priority":    key = t.priority; label = PRIO[t.priority].label; order = PRIO_ORDER[t.priority]; break;
         case "project":     key = t.project_id ?? "sem"; label = projectName(t.project_id) ?? "Sem projeto"; order = t.project_id ? 0 : 1; break;
         case "client":      key = t.client_id ?? "interno"; label = clientName(t.client_id); order = 0; break;
-        case "assigned_to": key = t.assigned_to ?? "sem"; label = t.assigned_to ?? "Sem responsavel"; order = t.assigned_to ? 0 : 1; break;
+        case "assigned_to": key = t.assignee_id ?? "sem"; label = assigneeName(t) ?? "Sem responsavel"; order = t.assignee_id ? 0 : 1; break;
         default:            key = "all"; label = "";
       }
       if (!map.has(key)) map.set(key, { key, label, items: [], order });
@@ -128,9 +136,24 @@ export default function Tarefas() {
     });
     return [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorted, view.groupBy, projects, adminClients]);
+  }, [sorted, view.groupBy, projects, adminClients, team]);
 
-  // ── KPIs (primeiro bloco, sempre sobre o conjunto filtrado) ──
+  // ── Carga por membro (cards da equipe) ───────────────────────
+  const workload = useMemo(() => {
+    const base = tasks.filter(t => t.status !== "concluida");
+    return team.filter(m => m.active).map(m => {
+      const mine = base.filter(t => t.assignee_id === m.id);
+      return {
+        member: m,
+        abertas: mine.length,
+        atrasadas: mine.filter(isOverdue).length,
+        andamento: mine.filter(t => t.status === "em_andamento").length,
+      };
+    }).sort((a, b) => b.abertas - a.abertas);
+  }, [tasks, team]);
+
+  const semDono = tasks.filter(t => t.status !== "concluida" && !t.assignee_id).length;
+
   const total     = filtered.length;
   const andamento = filtered.filter(t => t.status === "em_andamento").length;
   const atrasadas = filtered.filter(isOverdue).length;
@@ -141,22 +164,25 @@ export default function Tarefas() {
     .map(k => visibleCols.find(c => c.key === k))
     .filter(Boolean) as typeof ALL_COLUMNS;
 
-  const responsaveis = useMemo(
-    () => [...new Set(tasks.map(t => t.assigned_to).filter(Boolean))] as string[],
-    [tasks]);
-
   // ── Acoes ────────────────────────────────────────────────────
-  async function setStatus(id: string, s: Status) {
-    const prev = tasks.find(x => x.id === id)?.status;
-    setTasks(cur => cur.map(x => x.id === id ? { ...x, status: s } : x));
-    const { error } = await supabase.from("tasks").update({ status: s }).eq("id", id);
-    if (error && prev) {
-      setTasks(cur => cur.map(x => x.id === id ? { ...x, status: prev } : x));
-      setErro("Nao foi possivel alterar a etapa.");
-    }
+  async function patchTask(id: string, changes: Partial<TaskRow>, msgErro: string) {
+    const backup = tasks;
+    setTasks(cur => cur.map(x => x.id === id ? { ...x, ...changes } : x));
+    const { error } = await supabase.from("tasks").update(changes).eq("id", id);
+    if (error) { setTasks(backup); setErro(msgErro); }
   }
 
-  async function move(id: string, dir: -1 | 1) {
+  const setStatus = (id: string, s: Status) =>
+    patchTask(id, { status: s }, "Nao foi possivel alterar a etapa.");
+
+  const setAssignee = (id: string, memberId: string) =>
+    patchTask(id, { assignee_id: memberId || null }, "Nao foi possivel alterar o responsavel.");
+
+  function toggleDone(t: TaskRow) {
+    setStatus(t.id, t.status === "concluida" ? "em_andamento" : "concluida");
+  }
+
+  function move(id: string, dir: -1 | 1) {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
     const next = COLUMNS[colIndex(t.status) + dir];
@@ -169,11 +195,11 @@ export default function Tarefas() {
     const { data, error } = await supabase.from("tasks").insert({
       client_id: form.client_id || null,
       project_id: form.project_id || null,
+      assignee_id: form.assignee_id || null,
       title: form.title.trim(),
       description: form.description.trim() || null,
       status: form.status, priority: form.priority,
       due_date: form.due_date || null,
-      assigned_to: form.assigned_to.trim() || null,
     }).select().single();
     setSaving(false);
     if (error) { setErro("Erro ao criar: " + error.message); return; }
@@ -189,18 +215,15 @@ export default function Tarefas() {
     if (view.sortBy === key) upd({ sortDir: view.sortDir === "asc" ? "desc" : "asc" });
     else upd({ sortBy: key, sortDir: "asc" });
   }
-
   function toggleColumn(key: ColKey) {
     setView(v => ({
       ...v,
       columns: v.columns.includes(key) ? v.columns.filter(c => c !== key) : [...v.columns, key],
     }));
   }
-
   function moveColumn(key: ColKey, dir: -1 | 1) {
     setView(v => {
-      const i = v.columns.indexOf(key);
-      const j = i + dir;
+      const i = v.columns.indexOf(key), j = i + dir;
       if (i < 0 || j < 0 || j >= v.columns.length) return v;
       const next = [...v.columns];
       [next[i], next[j]] = [next[j], next[i]];
@@ -213,17 +236,30 @@ export default function Tarefas() {
     switch (col) {
       case "title":
         return (
-          <button className={cls("text-left hover:underline underline-offset-2 font-medium",
-            t.status === "concluida" && "line-through opacity-50")}
-            onClick={() => navigate(`/tarefas/${t.id}`)}>
-            {t.title}
-          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            {/* concluir sem sair da lista */}
+            <button
+              onClick={() => toggleDone(t)}
+              className="w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
+              style={t.status === "concluida"
+                ? { background: "var(--ok)", borderColor: "var(--ok)", color: "white" }
+                : { borderColor: "var(--line-light)" }}
+              title={t.status === "concluida" ? "Reabrir" : "Concluir"}
+              aria-label={t.status === "concluida" ? "Reabrir tarefa" : "Concluir tarefa"}
+            >
+              {t.status === "concluida" && <span className="text-[9px] leading-none">✓</span>}
+            </button>
+            <button className={cls("text-left hover:underline underline-offset-2 font-medium truncate",
+              t.status === "concluida" && "line-through opacity-50")}
+              onClick={() => navigate(`/tarefas/${t.id}`)}>
+              {t.title}
+            </button>
+          </div>
         );
       case "status":
         return (
           <select className="text-[11px] border hairline rounded px-1.5 py-0.5 bg-white dark:bg-[#11141b]"
-            value={t.status} onChange={e => setStatus(t.id, e.target.value as Status)}
-            onClick={e => e.stopPropagation()}>
+            value={t.status} onChange={e => setStatus(t.id, e.target.value as Status)}>
             {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         );
@@ -233,8 +269,21 @@ export default function Tarefas() {
         return projectName(t.project_id) ?? <span className="opacity-30">-</span>;
       case "client":
         return clientName(t.client_id);
-      case "assigned_to":
-        return t.assigned_to ?? <span className="opacity-30">-</span>;
+      case "assigned_to": {
+        const m = member(t.assignee_id);
+        return (
+          <select
+            className="text-[11px] border hairline rounded px-1.5 py-0.5 bg-white dark:bg-[#11141b] max-w-[150px]"
+            value={t.assignee_id ?? ""}
+            onChange={e => setAssignee(t.id, e.target.value)}
+            title={m?.name ?? "Sem responsavel"}
+          >
+            <option value="">Sem responsavel</option>
+            {team.filter(x => x.active || x.id === t.assignee_id).map(x =>
+              <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        );
+      }
       case "due_date":
         return t.due_date
           ? <span style={isOverdue(t) ? { color: "var(--bad)", fontWeight: 600 } : {}}>
@@ -248,6 +297,7 @@ export default function Tarefas() {
 
   const activeFilters = countActiveFilters(view.filters);
   const ctrlBtn = "text-[12px] px-3 py-1.5 rounded-lg border hairline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0";
+  const fa = view.filters.assigned;
 
   return (
     <>
@@ -265,7 +315,11 @@ export default function Tarefas() {
               </select>
             )}
             <Btn size="sm" onClick={() => {
-              setForm({ ...emptyForm(), client_id: isAdmin ? (adminClientId ?? "") : (scopedClientId ?? "") });
+              setForm({
+                ...emptyForm(),
+                client_id: isAdmin ? (adminClientId ?? "") : (scopedClientId ?? ""),
+                assignee_id: myMemberId ?? "",
+              });
               setShowForm(v => !v);
             }}>
               {showForm ? "Fechar" : "+ Nova tarefa"}
@@ -281,13 +335,75 @@ export default function Tarefas() {
           </div>
         )}
 
-        {/* Primeiro bloco: KPIs */}
+        {/* Primeiro bloco: indicadores */}
         <KpiGrid>
           <KpiCard label="Total"        value={total} />
           <KpiCard label="Em andamento" value={andamento} />
           <KpiCard label="Atrasadas"    value={atrasadas} />
           <KpiCard label="Concluidas"   value={concl} />
         </KpiGrid>
+
+        {/* Cards da equipe: carga de cada pessoa, clicaveis para filtrar */}
+        {team.length > 0 && (
+          <div className="flex gap-3 overflow-x-auto -mx-4 px-4 pb-2 mb-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+            {myMemberId && (
+              <button
+                onClick={() => updF({ assigned: fa === "eu" ? "todos" : "eu" })}
+                className="border hairline rounded-xl px-3.5 py-3 bg-white dark:bg-[#11141b] shadow-sm shrink-0
+                           flex items-center gap-3 min-w-[170px] transition-colors text-left"
+                style={fa === "eu" ? { borderColor: "var(--brand)", boxShadow: "0 0 0 1px var(--brand)" } : {}}
+              >
+                <Avatar name={member(myMemberId)?.name ?? "Eu"} color={member(myMemberId)?.color} size={34} />
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold truncate">Minhas tarefas</div>
+                  <div className="text-[11px] opacity-55">
+                    {workload.find(w => w.member.id === myMemberId)?.abertas ?? 0} abertas
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {workload.filter(w => w.member.id !== myMemberId).map(w => (
+              <button
+                key={w.member.id}
+                onClick={() => updF({ assigned: fa === w.member.id ? "todos" : w.member.id })}
+                className="border hairline rounded-xl px-3.5 py-3 bg-white dark:bg-[#11141b] shadow-sm shrink-0
+                           flex items-center gap-3 min-w-[170px] transition-colors text-left"
+                style={fa === w.member.id ? { borderColor: "var(--brand)", boxShadow: "0 0 0 1px var(--brand)" } : {}}
+              >
+                <Avatar name={w.member.name} color={w.member.color} size={34} />
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold truncate">{w.member.name}</div>
+                  <div className="text-[11px] opacity-55 truncate">
+                    {w.abertas} abertas
+                    {w.atrasadas > 0 && (
+                      <span style={{ color: "var(--bad)", fontWeight: 600 }}> · {w.atrasadas} atrasada{w.atrasadas > 1 ? "s" : ""}</span>
+                    )}
+                  </div>
+                  {w.member.role_title && (
+                    <div className="text-[10px] opacity-35 truncate">{w.member.role_title}</div>
+                  )}
+                </div>
+              </button>
+            ))}
+
+            {semDono > 0 && (
+              <button
+                onClick={() => updF({ assigned: fa === "sem" ? "todos" : "sem" })}
+                className="border border-dashed hairline rounded-xl px-3.5 py-3 shrink-0
+                           flex items-center gap-3 min-w-[150px] transition-colors text-left"
+                style={fa === "sem" ? { borderColor: "var(--brand)", borderStyle: "solid" } : {}}
+              >
+                <span className="w-[34px] h-[34px] rounded-full border border-dashed hairline shrink-0
+                                 flex items-center justify-center text-[13px] opacity-35">?</span>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold truncate">Sem responsavel</div>
+                  <div className="text-[11px] opacity-55">{semDono} abertas</div>
+                </div>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Barra de controles */}
         <div className="flex items-center gap-2 mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
@@ -302,6 +418,20 @@ export default function Tarefas() {
           </div>
 
           <span className="w-px h-5 bg-current opacity-10 shrink-0" />
+
+          {myMemberId && (
+            <button className={ctrlBtn}
+              style={fa === "eu" ? { background: "var(--brand)", color: "white", borderColor: "var(--brand)" } : {}}
+              onClick={() => updF({ assigned: fa === "eu" ? "todos" : "eu" })}>
+              Minhas
+            </button>
+          )}
+
+          <button className={ctrlBtn}
+            style={view.filters.overdue ? { background: "var(--bad)", color: "white", borderColor: "var(--bad)" } : {}}
+            onClick={() => updF({ overdue: !view.filters.overdue })}>
+            Atrasadas
+          </button>
 
           <button className={ctrlBtn}
             style={panel === "filtros" || activeFilters ? { borderColor: "var(--brand)", color: "var(--brand)" } : {}}
@@ -336,15 +466,20 @@ export default function Tarefas() {
             value={view.filters.search}
             onChange={e => updF({ search: e.target.value })}
           />
+
+          {activeFilters > 0 && (
+            <button className="text-[12px] opacity-55 hover:opacity-100 whitespace-nowrap shrink-0 underline underline-offset-2"
+              onClick={() => updF(emptyFilters())}>
+              Limpar
+            </button>
+          )}
         </div>
 
         {/* Painel de filtros */}
         {panel === "filtros" && (
           <SectionCard title="Filtros" className="mb-4"
-            action={
-              <button className="text-[12px] opacity-60 hover:opacity-100"
-                onClick={() => updF(emptyFilters())}>Limpar</button>
-            }>
+            action={<button className="text-[12px] opacity-60 hover:opacity-100"
+              onClick={() => updF(emptyFilters())}>Limpar</button>}>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Etapa</span>
@@ -405,8 +540,9 @@ export default function Tarefas() {
                   <select className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                     value={view.filters.assigned} onChange={e => updF({ assigned: e.target.value })}>
                     <option value="todos">Todos</option>
+                    {myMemberId && <option value="eu">Somente minhas</option>}
                     <option value="sem">Sem responsavel</option>
-                    {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+                    {team.filter(m => m.active).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                 </label>
                 <label className="flex items-center gap-2 text-[13px] cursor-pointer mt-1">
@@ -422,17 +558,14 @@ export default function Tarefas() {
         {/* Painel de colunas */}
         {panel === "colunas" && view.mode === "lista" && (
           <SectionCard title="Colunas" className="mb-4"
-            action={
-              <button className="text-[12px] opacity-60 hover:opacity-100"
-                onClick={() => upd({ columns: ["title", "status", "priority", "project", "due_date", "assigned_to"] })}>
-                Restaurar padrao
-              </button>
-            }>
+            action={<button className="text-[12px] opacity-60 hover:opacity-100"
+              onClick={() => upd({ columns: ["title", "status", "priority", "project", "due_date", "assigned_to"] })}>
+              Restaurar padrao
+            </button>}>
             <p className="text-[12px] opacity-50 mb-3">
               Marque as colunas visiveis e use as setas para mudar a ordem.
             </p>
             <div className="flex flex-col gap-1">
-              {/* visiveis primeiro, na ordem atual */}
               {view.columns.map((key, i) => {
                 const meta = ALL_COLUMNS.find(c => c.key === key);
                 if (!meta || (meta.adminOnly && !isAdmin)) return null;
@@ -447,7 +580,6 @@ export default function Tarefas() {
                   </div>
                 );
               })}
-              {/* ocultas */}
               {ALL_COLUMNS.filter(c => !view.columns.includes(c.key) && (!c.adminOnly || isAdmin)).map(c => (
                 <div key={c.key} className="flex items-center gap-2 py-1.5 border-b hairline last:border-0 opacity-50">
                   <input type="checkbox" checked={false} onChange={() => toggleColumn(c.key)} />
@@ -458,7 +590,7 @@ export default function Tarefas() {
           </SectionCard>
         )}
 
-        {/* Form de nova tarefa */}
+        {/* Nova tarefa */}
         {showForm && (
           <SectionCard title="Nova Tarefa" className="mb-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -466,6 +598,14 @@ export default function Tarefas() {
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Titulo</span>
                 <input className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                   value={form.title} onChange={f("title")} placeholder="Descreva a tarefa" autoFocus />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] opacity-55 uppercase tracking-wide">Responsavel</span>
+                <select className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
+                  value={form.assignee_id} onChange={f("assignee_id")}>
+                  <option value="">Sem responsavel</option>
+                  {team.filter(m => m.active).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
               </label>
               {isAdmin && (
                 <label className="flex flex-col gap-1">
@@ -506,11 +646,6 @@ export default function Tarefas() {
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Prazo</span>
                 <input type="date" className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                   value={form.due_date} onChange={f("due_date")} />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] opacity-55 uppercase tracking-wide">Responsavel</span>
-                <input className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
-                  value={form.assigned_to} onChange={f("assigned_to")} placeholder="Nome" />
               </label>
               <label className="flex flex-col gap-1 sm:col-span-2 md:col-span-4">
                 <span className="text-[11px] opacity-55 uppercase tracking-wide">Descricao</span>
@@ -556,6 +691,7 @@ export default function Tarefas() {
                   <div className="flex flex-col gap-3 min-h-[60px]">
                     {colTasks.map(t => {
                       const idx = colIndex(t.status);
+                      const m = member(t.assignee_id);
                       return (
                         <div key={t.id} className="border hairline rounded-lg p-3 bg-white dark:bg-[#11141b] shadow-sm flex flex-col gap-2">
                           <div className="flex items-start justify-between gap-2">
@@ -570,12 +706,16 @@ export default function Tarefas() {
                             </span>
                           )}
                           <div className="flex items-center gap-2 flex-wrap text-[11px] opacity-60">
+                            {m
+                              ? <span className="inline-flex items-center gap-1.5">
+                                  <Avatar name={m.name} color={m.color} size={18} />{m.name}
+                                </span>
+                              : <span className="opacity-60">Sem responsavel</span>}
                             {isAdmin && (
                               <span className="inline-flex items-center gap-1">
                                 <StatusDot status="neutral" />{clientName(t.client_id)}
                               </span>
                             )}
-                            {t.assigned_to && <span>{t.assigned_to}</span>}
                             {t.due_date && (
                               <span className="font-mono" style={isOverdue(t) ? { color: "var(--bad)", fontWeight: 600 } : {}}>
                                 {fmtDate(t.due_date)}
@@ -602,7 +742,6 @@ export default function Tarefas() {
             })}
           </div>
         ) : (
-          /* Lista agrupada com colunas configuraveis */
           <div className="flex flex-col gap-4">
             {groups.map(g => (
               <SectionCard key={g.key} title={view.groupBy === "none" ? undefined : `${g.label}  (${g.items.length})`}>
@@ -620,9 +759,7 @@ export default function Tarefas() {
                                   style={active ? { color: "var(--brand)", opacity: 1 } : {}}
                                   onClick={() => toggleSort(c.key)}>
                                   {c.label}
-                                  <span className="text-[9px]">
-                                    {active ? (view.sortDir === "asc" ? "▲" : "▼") : "◇"}
-                                  </span>
+                                  <span className="text-[9px]">{active ? (view.sortDir === "asc" ? "▲" : "▼") : "◇"}</span>
                                 </button>
                               ) : c.label}
                             </th>

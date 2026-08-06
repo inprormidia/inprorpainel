@@ -19,6 +19,7 @@ import Financeiro from "./pages/Financeiro";
 import Tarefas    from "./pages/Tarefas";
 import TarefaDetalhe from "./pages/Tarefas/Detalhe";
 import Projetos   from "./pages/Projetos";
+import Equipe     from "./pages/Equipe";
 import Estrategias from "./pages/Estrategias";
 import MetasKpis  from "./pages/MetasKpis";
 
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/relatorios"          element={<Relatorios />} />
           <Route path="/financeiro"          element={<Financeiro />} />
           <Route path="/reunioes"            element={<Reunioes />} />
+          <Route path="/equipe"              element={<AdminRoute><Equipe /></AdminRoute>} />
           <Route path="/clientes"            element={<AdminRoute><Clientes /></AdminRoute>} />
         </Route>
 

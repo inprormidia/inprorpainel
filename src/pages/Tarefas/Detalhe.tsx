@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
-  SectionCard, Badge, Btn, StatusDot, EmptyState,
+  SectionCard, Badge, Btn, StatusDot, EmptyState, Avatar,
 } from "../../components/ui/InprorComponents";
 import { useClientScope } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
@@ -15,7 +15,7 @@ import {
 export default function TarefaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, adminClients, authLoading } = useClientScope();
+  const { isAdmin, adminClients, authLoading, team, myMemberId } = useClientScope();
 
   const [task, setTask]         = useState<TaskRow | null>(null);
   const [projects, setProjects] = useState<ProjectLite[]>([]);
@@ -115,6 +115,7 @@ export default function TarefaDetalhe() {
   const done = task.status === "concluida";
   const overdue = isOverdue(task);
   const project = projects.find(p => p.id === task.project_id);
+  const assignee = task.assignee_id ? team.find(m => m.id === task.assignee_id) : undefined;
   const clientLabel = task.client_id
     ? (adminClients.find(c => c.id === task.client_id)?.name ?? "Cliente")
     : "Interno (agencia)";
@@ -298,12 +299,28 @@ export default function TarefaDetalhe() {
               </Field>
 
               <Field label="Responsavel">
-                <input className={selectCls} defaultValue={task.assigned_to ?? ""}
-                  placeholder="Nome de quem executa"
-                  onBlur={e => {
-                    const v = e.target.value.trim();
-                    if (v !== (task.assigned_to ?? "")) patch({ assigned_to: v || null });
-                  }} />
+                <div className="flex items-center gap-2">
+                  <select className={selectCls} value={task.assignee_id ?? ""}
+                    onChange={e => patch({ assignee_id: e.target.value || null })}>
+                    <option value="">Sem responsavel</option>
+                    {team.filter(m => m.active || m.id === task.assignee_id).map(m =>
+                      <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  {assignee && <Avatar name={assignee.name} color={assignee.color} size={28} />}
+                </div>
+                {assignee?.role_title && (
+                  <span className="text-[11px] opacity-50 mt-1">{assignee.role_title}</span>
+                )}
+                {!assignee && task.assigned_to && (
+                  <span className="text-[11px] opacity-45 mt-1">Registro anterior: {task.assigned_to}</span>
+                )}
+                {myMemberId && task.assignee_id !== myMemberId && (
+                  <button className="text-[12px] mt-1.5 text-left underline underline-offset-2 w-fit"
+                    style={{ color: "var(--copper)" }}
+                    onClick={() => patch({ assignee_id: myMemberId })}>
+                    Atribuir a mim
+                  </button>
+                )}
               </Field>
 
               <Field label="Projeto">

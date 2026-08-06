@@ -123,6 +123,36 @@ export function Table({ headers, rows, empty = "Nenhum registro encontrado." }: 
   );
 }
 
+// ── Avatar ─────────────────────────────────────────────────────
+// Iniciais coloridas. Usado para identificar quem responde pela tarefa.
+export function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+export function Avatar({ name, color, size = 28, title }: {
+  name: string; color?: string | null; size?: number; title?: string;
+}) {
+  return (
+    <span
+      className="rounded-full inline-flex items-center justify-center font-semibold shrink-0 select-none"
+      style={{
+        width: size, height: size,
+        background: color || "var(--brand)",
+        color: "white",
+        fontSize: Math.max(9, Math.round(size * 0.38)),
+        lineHeight: 1,
+      }}
+      title={title ?? name}
+      aria-hidden={title ? undefined : true}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
 // ── StatusDot ──────────────────────────────────────────────────
 export function StatusDot({ status }: { status: "ok" | "warn" | "bad" | "neutral" }) {
   const colors: Record<string, string> = {

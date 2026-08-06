@@ -7,7 +7,7 @@ export interface TaskRow {
   id: string; client_id: string | null; project_id: string | null;
   title: string; description: string | null;
   status: Status; priority: Priority;
-  due_date: string | null; assigned_to: string | null;
+  due_date: string | null; assigned_to: string | null; assignee_id: string | null;
   created_at: string; updated_at?: string | null;
 }
 
@@ -99,7 +99,7 @@ export interface Filters {
   priority: Priority[];
   project: string;   // "todos" | "sem" | project_id
   client: string;    // "todos" | "interno" | client_id
-  assigned: string;  // "todos" | "sem" | nome
+  assigned: string;  // "todos" | "sem" | "eu" | team_member.id
   overdue: boolean;
 }
 

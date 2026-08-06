@@ -13,6 +13,7 @@ const NAV_ADMIN = [
     items: [
       { path: "/",          label: "Dashboard",   icon: "◎" },
       { path: "/clientes",  label: "Clientes",    icon: "☷" },
+      { path: "/equipe",    label: "Equipe",      icon: "◍" },
       { path: "/projetos",  label: "Projetos",    icon: "▤" },
       { path: "/tarefas",   label: "Tarefas",     icon: "◑" },
     ],
