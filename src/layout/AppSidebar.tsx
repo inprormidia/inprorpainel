@@ -7,45 +7,46 @@ function cls(...args: (string | boolean | undefined | null)[]) {
   return args.filter(Boolean).join(" ");
 }
 
-const NAV_ADMIN = [
+// moduleKey nulo = sempre visivel; adminOnly = so o dono da agencia
+const NAV_STAFF = [
   {
     group: "Geral",
     items: [
-      { path: "/",          label: "Dashboard",   icon: "◎" },
-      { path: "/clientes",  label: "Clientes",    icon: "☷" },
-      { path: "/equipe",    label: "Equipe",      icon: "◍" },
-      { path: "/projetos",  label: "Projetos",    icon: "▤" },
-      { path: "/tarefas",   label: "Tarefas",     icon: "◑" },
+      { path: "/",          label: "Dashboard",   icon: "◎", moduleKey: null,       adminOnly: false },
+      { path: "/clientes",  label: "Clientes",    icon: "☷", moduleKey: "clientes", adminOnly: true },
+      { path: "/equipe",    label: "Equipe",      icon: "◍", moduleKey: "equipe",   adminOnly: true },
+      { path: "/projetos",  label: "Projetos",    icon: "▤", moduleKey: "projetos", adminOnly: false },
+      { path: "/tarefas",   label: "Tarefas",     icon: "◑", moduleKey: "tarefas",  adminOnly: false },
     ],
   },
   {
     group: "Estrategia",
     items: [
-      { path: "/estrategias", label: "Estrategias", icon: "⬡" },
-      { path: "/metas-kpis",  label: "Metas & KPIs", icon: "◈" },
+      { path: "/estrategias", label: "Estrategias", icon: "⬡", moduleKey: "estrategias", adminOnly: false },
+      { path: "/metas-kpis",  label: "Metas & KPIs", icon: "◈", moduleKey: "metas-kpis", adminOnly: false },
     ],
   },
   {
     group: "Delivery",
     items: [
-      { path: "/delivery",   label: "Delivery",    icon: "◈" },
-      { path: "/reputacao",  label: "Reputacao",   icon: "★" },
+      { path: "/delivery",   label: "Delivery",    icon: "◈", moduleKey: "delivery",  adminOnly: false },
+      { path: "/reputacao",  label: "Reputacao",   icon: "★", moduleKey: "reputacao", adminOnly: false },
     ],
   },
   {
     group: "Marketing",
     items: [
-      { path: "/trafego-pago", label: "Trafego Pago", icon: "➚" },
-      { path: "/social",       label: "Redes Sociais", icon: "≋" },
-      { path: "/cardapio",     label: "Cardapio/Site", icon: "⌂" },
+      { path: "/trafego-pago", label: "Trafego Pago", icon: "➚", moduleKey: "trafego-pago", adminOnly: false },
+      { path: "/social",       label: "Redes Sociais", icon: "≋", moduleKey: "social",     adminOnly: false },
+      { path: "/cardapio",     label: "Cardapio/Site", icon: "⌂", moduleKey: "cardapio",   adminOnly: false },
     ],
   },
   {
     group: "Operacao",
     items: [
-      { path: "/relatorios", label: "Relatorios", icon: "≡" },
-      { path: "/financeiro", label: "Financeiro", icon: "$" },
-      { path: "/reunioes",   label: "Reunioes",   icon: "◐" },
+      { path: "/relatorios", label: "Relatorios", icon: "≡", moduleKey: "relatorios", adminOnly: false },
+      { path: "/financeiro", label: "Financeiro", icon: "$", moduleKey: "financeiro", adminOnly: true },
+      { path: "/reunioes",   label: "Reunioes",   icon: "◐", moduleKey: "reunioes",   adminOnly: false },
     ],
   },
 ];
@@ -95,22 +96,32 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { user, role, clientModules, signOut } = useAuth();
-  const { adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const { adminClientId, setAdminClientId, adminClients, myModules } = useClientScope();
 
   const nav = useMemo(() => {
-    if (role === "admin") return NAV_ADMIN;
+    if (role === "admin") return NAV_STAFF;
+    if (role === "agency") {
+      // equipe: esconde o que e exclusivo do admin e o que nao foi liberado
+      return NAV_STAFF.map(group => ({
+        ...group,
+        items: group.items.filter(it =>
+          !it.adminOnly &&
+          (it.moduleKey === null || (myModules ?? []).includes(it.moduleKey))
+        ),
+      })).filter(g => g.items.length > 0);
+    }
     return NAV_CLIENT.map(group => ({
       ...group,
       items: group.items.filter(it =>
         it.moduleKey === null ||
         (clientModules !== null && clientModules.includes(it.moduleKey))
       ),
-    }));
-  }, [role, clientModules]);
+    })).filter(g => g.items.length > 0);
+  }, [role, clientModules, myModules]);
 
   const displayName = (user?.user_metadata?.name as string) || user?.email?.split("@")[0] || "Usuario";
   const initials = displayName.slice(0, 2).toUpperCase();
-  const roleLabel = role === "admin" ? "Admin" : "Cliente";
+  const roleLabel = role === "admin" ? "Admin" : role === "agency" ? "Equipe" : "Cliente";
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -137,7 +148,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
       </div>
 
       {/* Global client filter - admin */}
-      {role === "admin" && adminClients.length > 0 && (
+      {(role === "admin" || role === "agency") && adminClients.length > 0 && (
         <div className="px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="nav-group-label mb-1.5">Contexto</div>
           <select

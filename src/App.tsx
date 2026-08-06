@@ -3,6 +3,7 @@ import { ScrollToTop } from "./components/common/ScrollToTop";
 import AppLayout from "./layout/AppLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
+import ModuleRoute from "./components/auth/ModuleRoute";
 
 import SignIn     from "./pages/AuthPages/SignIn";
 import NotFound   from "./pages/OtherPage/NotFound";
@@ -30,19 +31,19 @@ export default function App() {
       <Routes>
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index path="/"              element={<Dashboard />} />
-          <Route path="/delivery"            element={<Delivery />} />
-          <Route path="/reputacao"           element={<Reputacao />} />
-          <Route path="/trafego-pago"        element={<TrafegoPago />} />
-          <Route path="/social"              element={<Social />} />
-          <Route path="/cardapio"            element={<Cardapio />} />
-          <Route path="/projetos"            element={<Projetos />} />
-          <Route path="/tarefas"             element={<Tarefas />} />
+          <Route path="/delivery"            element={<ModuleRoute module="delivery"><Delivery /></ModuleRoute>} />
+          <Route path="/reputacao"           element={<ModuleRoute module="reputacao"><Reputacao /></ModuleRoute>} />
+          <Route path="/trafego-pago"        element={<ModuleRoute module="trafego-pago"><TrafegoPago /></ModuleRoute>} />
+          <Route path="/social"              element={<ModuleRoute module="social"><Social /></ModuleRoute>} />
+          <Route path="/cardapio"            element={<ModuleRoute module="cardapio"><Cardapio /></ModuleRoute>} />
+          <Route path="/projetos"            element={<ModuleRoute module="projetos"><Projetos /></ModuleRoute>} />
+          <Route path="/tarefas"             element={<ModuleRoute module="tarefas"><Tarefas /></ModuleRoute>} />
           <Route path="/tarefas/:id"         element={<TarefaDetalhe />} />
-          <Route path="/estrategias"         element={<Estrategias />} />
-          <Route path="/metas-kpis"          element={<MetasKpis />} />
-          <Route path="/relatorios"          element={<Relatorios />} />
-          <Route path="/financeiro"          element={<Financeiro />} />
-          <Route path="/reunioes"            element={<Reunioes />} />
+          <Route path="/estrategias"         element={<ModuleRoute module="estrategias"><Estrategias /></ModuleRoute>} />
+          <Route path="/metas-kpis"          element={<ModuleRoute module="metas-kpis"><MetasKpis /></ModuleRoute>} />
+          <Route path="/relatorios"          element={<ModuleRoute module="relatorios"><Relatorios /></ModuleRoute>} />
+          <Route path="/financeiro"          element={<ModuleRoute module="financeiro"><Financeiro /></ModuleRoute>} />
+          <Route path="/reunioes"            element={<ModuleRoute module="reunioes"><Reunioes /></ModuleRoute>} />
           <Route path="/equipe"              element={<AdminRoute><Equipe /></AdminRoute>} />
           <Route path="/clientes"            element={<AdminRoute><Clientes /></AdminRoute>} />
         </Route>

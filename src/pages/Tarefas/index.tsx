@@ -27,7 +27,7 @@ type AssigneeMap = Record<string, string[]>;
 export default function Tarefas() {
   const navigate = useNavigate();
   const {
-    scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients,
+    scopedClientId, authLoading, isAdmin, isStaff, adminClientId, setAdminClientId, adminClients,
     team, myMemberId,
   } = useClientScope();
 
@@ -350,7 +350,7 @@ export default function Tarefas() {
         subtitle="Gestao de atividades da agencia"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isStaff && (
               <select className="text-xs border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                 value={adminClientId ?? ""} onChange={e => setAdminClientId(e.target.value || null)}>
                 <option value="">Todos os clientes</option>

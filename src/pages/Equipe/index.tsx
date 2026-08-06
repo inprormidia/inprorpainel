@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
   PageWrap, KpiCard, KpiGrid, SectionCard, Btn, EmptyState, Avatar,
@@ -14,6 +13,22 @@ const COLORS = [
   "#2c5f45", "#b5744a", "#3d6b52", "#64748b",
 ];
 
+// Modulos que podem ser liberados para a equipe.
+// Financeiro, clientes e equipe ficam fora: sao exclusivos do admin.
+const MODULOS: { key: string; label: string }[] = [
+  { key: "tarefas",      label: "Tarefas" },
+  { key: "projetos",     label: "Projetos" },
+  { key: "delivery",     label: "Delivery" },
+  { key: "reputacao",    label: "Reputacao" },
+  { key: "trafego-pago", label: "Trafego pago" },
+  { key: "social",       label: "Redes sociais" },
+  { key: "cardapio",     label: "Cardapio e site" },
+  { key: "estrategias",  label: "Estrategias" },
+  { key: "metas-kpis",   label: "Metas e KPIs" },
+  { key: "relatorios",   label: "Relatorios" },
+  { key: "reunioes",     label: "Reunioes" },
+];
+
 const emptyForm = () => ({
   name: "", role_title: "", email: "", color: COLORS[0], active: "sim",
 });
@@ -23,11 +38,11 @@ interface Member {
   id: string; user_id: string | null; name: string;
   email: string | null; role_title: string | null;
   color: string | null; active: boolean;
+  modules?: string[] | null;
 }
 
 export default function Equipe() {
-  const navigate = useNavigate();
-  const { authLoading, team, reloadTeam, myMemberId } = useClientScope();
+  const { authLoading, team, reloadTeam, myMemberId, adminClients } = useClientScope();
 
   const [tasks, setTasks]   = useState<TaskRow[]>([]);
   const [assignees, setAssignees] = useState<Record<string, string[]>>({});
@@ -40,12 +55,24 @@ export default function Equipe() {
   const [saving, setSaving]       = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
+  // painel de acesso: clientes atendidos e modulos liberados
+  const [accessId, setAccessId]   = useState<string | null>(null);
+  const [memberClients, setMemberClients] = useState<Record<string, string[]>>({});
+  const [savingAccess, setSavingAccess]   = useState(false);
+  const [convidando, setConvidando]       = useState<string | null>(null);
+  const [aviso, setAviso]                 = useState<string | null>(null);
+
   useEffect(() => {
     if (authLoading) return;
     Promise.all([
       supabase.from("tasks").select("*"),
       supabase.from("task_assignees").select("task_id,member_id"),
-    ]).then(([t, a]) => {
+      supabase.from("member_clients").select("member_id,client_id"),
+    ]).then(([t, a, mc]) => {
+      const byMember: Record<string, string[]> = {};
+      ((mc.data as { member_id: string; client_id: string }[]) ?? [])
+        .forEach(r => { (byMember[r.member_id] ??= []).push(r.client_id); });
+      setMemberClients(byMember);
       setTasks((t.data as TaskRow[]) ?? []);
       const map: Record<string, string[]> = {};
       ((a.data as { task_id: string; member_id: string }[]) ?? [])
@@ -120,6 +147,56 @@ export default function Equipe() {
     }
   }
 
+  // liga ou desliga um cliente do escopo do membro
+  async function toggleClient(memberId: string, clientId: string) {
+    const atuais = memberClients[memberId] ?? [];
+    const on = atuais.includes(clientId);
+    setSavingAccess(true);
+    setMemberClients(cur => ({
+      ...cur,
+      [memberId]: on ? atuais.filter(c => c !== clientId) : [...atuais, clientId],
+    }));
+    const { error } = on
+      ? await supabase.from("member_clients").delete()
+          .eq("member_id", memberId).eq("client_id", clientId)
+      : await supabase.from("member_clients")
+          .insert({ member_id: memberId, client_id: clientId });
+    setSavingAccess(false);
+    if (error) {
+      setMemberClients(cur => ({ ...cur, [memberId]: atuais }));
+      setErro("Nao foi possivel alterar os clientes: " + error.message);
+    }
+  }
+
+  async function toggleModule(m: Member, key: string) {
+    const atuais = m.modules ?? [];
+    const novos = atuais.includes(key) ? atuais.filter(x => x !== key) : [...atuais, key];
+    setSavingAccess(true);
+    const { error } = await supabase.from("team_members")
+      .update({ modules: novos }).eq("id", m.id);
+    setSavingAccess(false);
+    if (error) { setErro("Nao foi possivel alterar os modulos: " + error.message); return; }
+    await reloadTeam();
+  }
+
+  // dispara o convite por e-mail (Edge Function convidar-membro)
+  async function convidar(m: Member) {
+    const email = (m.email ?? "").trim();
+    if (!email) { setErro("Cadastre o e-mail da pessoa antes de convidar."); return; }
+    setConvidando(m.id);
+    setErro(null); setAviso(null);
+    const { data, error } = await supabase.functions.invoke("convidar-membro", {
+      body: { email, member_id: m.id, redirect_to: window.location.origin + "/signin" },
+    });
+    setConvidando(null);
+    if (error || (data && data.error)) {
+      setErro("Convite nao enviado: " + (data?.error ?? error?.message ?? "erro desconhecido"));
+      return;
+    }
+    setAviso(`Convite enviado para ${email}.`);
+    await reloadTeam();
+  }
+
   const f = (k: keyof FormShape) =>
     (e: { target: { value: string } }) => setForm(prev => ({ ...prev, [k]: e.target.value }));
 
@@ -140,6 +217,13 @@ export default function Equipe() {
             style={{ borderColor: "var(--bad)" }}>
             <span className="text-[13px]" style={{ color: "var(--bad)" }}>{erro}</span>
             <button className="text-[11px] opacity-60" onClick={() => setErro(null)}>fechar</button>
+          </div>
+        )}
+        {aviso && (
+          <div className="mb-4 border hairline rounded-lg px-4 py-2.5 flex items-center justify-between gap-3"
+            style={{ borderColor: "var(--ok)" }}>
+            <span className="text-[13px]" style={{ color: "var(--ok)" }}>{aviso}</span>
+            <button className="text-[11px] opacity-60" onClick={() => setAviso(null)}>fechar</button>
           </div>
         )}
 
@@ -240,9 +324,13 @@ export default function Equipe() {
                       </div>
                       {m.role_title && <div className="text-[12px] opacity-55 truncate">{m.role_title}</div>}
                       {m.email && <div className="text-[11px] opacity-40 truncate">{m.email}</div>}
-                      {!m.user_id && (
-                        <div className="text-[11px] opacity-40 mt-0.5">sem login vinculado</div>
-                      )}
+                      <div className="text-[11px] mt-1 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ background: m.user_id ? "var(--ok)" : "var(--line-light)" }} />
+                        <span className="opacity-50">
+                          {m.user_id ? "acesso liberado" : "sem acesso ao painel"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -263,11 +351,81 @@ export default function Equipe() {
                     </div>
                   </div>
 
+                  {/* Acesso: clientes atendidos e modulos liberados */}
+                  {accessId === m.id && (
+                    <div className="border-t hairline pt-3 flex flex-col gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide opacity-55 mb-1.5">
+                          Clientes atendidos
+                          <span className="ml-1 opacity-70">({(memberClients[m.id] ?? []).length})</span>
+                        </div>
+                        {adminClients.length === 0 ? (
+                          <p className="text-[12px] opacity-45">Nenhum cliente cadastrado.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {adminClients.map(c => {
+                              const on = (memberClients[m.id] ?? []).includes(c.id);
+                              return (
+                                <button key={c.id} type="button"
+                                  onClick={() => toggleClient(m.id, c.id)}
+                                  className="text-[11px] px-2.5 py-1 rounded-full border transition-colors"
+                                  style={on
+                                    ? { background: "var(--brand)", color: "white", borderColor: "var(--brand)" }
+                                    : { borderColor: "var(--line-light)" }}
+                                  aria-pressed={on}>
+                                  {c.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide opacity-55 mb-1.5">
+                          Modulos liberados
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {MODULOS.map(mod => {
+                            const on = (m.modules ?? []).includes(mod.key);
+                            return (
+                              <button key={mod.key} type="button"
+                                onClick={() => toggleModule(m as Member, mod.key)}
+                                className="text-[11px] px-2.5 py-1 rounded-full border transition-colors"
+                                style={on
+                                  ? { background: "var(--copper)", color: "white", borderColor: "var(--copper)" }
+                                  : { borderColor: "var(--line-light)" }}
+                                aria-pressed={on}>
+                                {mod.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] opacity-40 mt-2 leading-relaxed">
+                          Financeiro, clientes e equipe ficam sempre restritos ao administrador.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {!m.user_id && (
+                          <Btn size="sm" onClick={() => convidar(m as Member)}
+                            disabled={convidando === m.id || !m.email}>
+                            {convidando === m.id ? "Enviando..." : "Convidar por e-mail"}
+                          </Btn>
+                        )}
+                        {!m.user_id && !m.email && (
+                          <span className="text-[11px] opacity-50">Cadastre o e-mail para poder convidar.</span>
+                        )}
+                        {savingAccess && <span className="text-[11px] opacity-50">salvando...</span>}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2 pt-1 border-t hairline">
                     <button className="text-[12px] font-semibold underline underline-offset-2"
                       style={{ color: "var(--copper)" }}
-                      onClick={() => navigate("/tarefas")}>
-                      Ver tarefas
+                      onClick={() => setAccessId(accessId === m.id ? null : m.id)}>
+                      {accessId === m.id ? "Fechar acesso" : "Acesso"}
                     </button>
                     {confirmId === m.id ? (
                       <span className="flex items-center gap-1.5">
