@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, ReactNode } from "react";
-import { useNavigate } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import {
   PageWrap, KpiCard, KpiGrid, SectionCard, Badge, Btn, StatusDot, EmptyState,
@@ -7,6 +6,7 @@ import {
 } from "../../components/ui/InprorComponents";
 import { useClientScope } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
+import TarefaPainel from "./TarefaPainel";
 import {
   TaskRow, ProjectLite, Status, Priority, ColKey, GroupBy, ViewConfig,
   COLUMNS, ALL_COLUMNS, GROUP_OPTIONS, PRIO, PRIORITIES, PRIO_ORDER,
@@ -25,7 +25,6 @@ type FormShape = ReturnType<typeof emptyForm>;
 type AssigneeMap = Record<string, string[]>;
 
 export default function Tarefas() {
-  const navigate = useNavigate();
   const {
     scopedClientId, authLoading, isAdmin, isStaff, adminClientId, setAdminClientId, adminClients,
     team, myMemberId,
@@ -41,11 +40,25 @@ export default function Tarefas() {
   const [view, setView] = useState<ViewConfig>(loadView);
   const [panel, setPanel] = useState<"none" | "filtros" | "colunas">("none");
 
+  // tarefa aberta no painel lateral e titulo em edicao direta na linha
+  const [peekId, setPeekId]       = useState<string | null>(null);
+  const [editing, setEditing]     = useState<{ id: string; value: string } | null>(null);
+  const [pickerId, setPickerId]   = useState<string | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState<FormShape>(emptyForm());
   const [saving, setSaving]     = useState(false);
 
   useEffect(() => { saveView(view); }, [view]);
+
+  useEffect(() => {
+    if (!peekId && !pickerId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setPeekId(null); setPickerId(null); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [peekId, pickerId]);
 
   const upd  = (patch: Partial<ViewConfig>) => setView(v => ({ ...v, ...patch }));
   const updF = (patch: Partial<ViewConfig["filters"]>) =>
@@ -198,6 +211,34 @@ export default function Tarefas() {
     if (error) { setTasks(backup); setErro(msgErro); }
   }
 
+  // grava um campo direto da linha, sem abrir a tarefa
+  const setField = (id: string, changes: Partial<TaskRow>, msg: string) =>
+    patchTask(id, changes, msg);
+
+  async function salvarTitulo() {
+    if (!editing) return;
+    const t = tasks.find(x => x.id === editing.id);
+    const novo = editing.value.trim();
+    setEditing(null);
+    if (!t || !novo || novo === t.title) return;
+    await patchTask(editing.id, { title: novo }, "Nao foi possivel renomear a tarefa.");
+  }
+
+  async function toggleAssigneeNaLinha(taskId: string, memberId: string) {
+    const atuais = assignees[taskId] ?? [];
+    const on = atuais.includes(memberId);
+    const novos = on ? atuais.filter(x => x !== memberId) : [...atuais, memberId];
+    setAssignees(cur => ({ ...cur, [taskId]: novos }));
+    const { error } = on
+      ? await supabase.from("task_assignees").delete()
+          .eq("task_id", taskId).eq("member_id", memberId)
+      : await supabase.from("task_assignees").insert({ task_id: taskId, member_id: memberId });
+    if (error) {
+      setAssignees(cur => ({ ...cur, [taskId]: atuais }));
+      setErro("Nao foi possivel alterar os responsaveis.");
+    }
+  }
+
   const setStatus = (id: string, s: Status) =>
     patchTask(id, { status: s }, "Nao foi possivel alterar a etapa.");
 
@@ -261,12 +302,15 @@ export default function Tarefas() {
   }
 
   // ── Celulas ──────────────────────────────────────────────────
+  // Celulas editaveis: os campos mudam sem sair da lista
+  const inlineSel = "text-[12px] border border-transparent hover:border-[color:var(--line-light)] rounded px-1.5 py-0.5 bg-transparent focus:bg-white dark:focus:bg-[#11141b] cursor-pointer max-w-[160px]";
+
   function cell(col: ColKey, t: TaskRow): ReactNode {
     switch (col) {
-      case "title":
+      case "title": {
+        const emEdicao = editing?.id === t.id;
         return (
           <div className="flex items-center gap-2 min-w-0">
-            {/* concluir sem sair da lista */}
             <button
               onClick={() => toggleDone(t)}
               className="w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
@@ -278,40 +322,121 @@ export default function Tarefas() {
             >
               {t.status === "concluida" && <span className="text-[9px] leading-none">✓</span>}
             </button>
-            <button className={cls("text-left hover:underline underline-offset-2 font-medium truncate",
-              t.status === "concluida" && "line-through opacity-50")}
-              onClick={() => navigate(`/tarefas/${t.id}`)}>
-              {t.title}
-            </button>
+
+            {emEdicao ? (
+              <input
+                autoFocus
+                className="text-[13px] font-medium border hairline rounded px-1.5 py-0.5 bg-white dark:bg-[#11141b] w-full"
+                value={editing.value}
+                onChange={e => setEditing({ id: t.id, value: e.target.value })}
+                onBlur={salvarTitulo}
+                onKeyDown={e => {
+                  if (e.key === "Enter") salvarTitulo();
+                  if (e.key === "Escape") setEditing(null);
+                }}
+              />
+            ) : (
+              <button
+                className={cls("text-left font-medium truncate hover:underline underline-offset-2",
+                  t.status === "concluida" && "line-through opacity-50")}
+                onClick={() => setPeekId(t.id)}
+                onDoubleClick={e => { e.stopPropagation(); setEditing({ id: t.id, value: t.title }); }}
+                title="Clique para abrir, clique duplo para renomear"
+              >
+                {t.title}
+              </button>
+            )}
           </div>
         );
+      }
       case "status":
         return (
-          <select className="text-[11px] border hairline rounded px-1.5 py-0.5 bg-white dark:bg-[#11141b]"
-            value={t.status} onChange={e => setStatus(t.id, e.target.value as Status)}>
+          <select className={inlineSel} value={t.status}
+            onChange={e => setStatus(t.id, e.target.value as Status)}>
             {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         );
       case "priority":
-        return <Badge label={PRIO[t.priority].label} color={PRIO[t.priority].color} />;
+        return (
+          <select className={inlineSel} value={t.priority}
+            onChange={e => setField(t.id, { priority: e.target.value as Priority }, "Nao foi possivel alterar a prioridade.")}>
+            {PRIORITIES.map(pr => <option key={pr} value={pr}>{PRIO[pr].label}</option>)}
+          </select>
+        );
       case "project":
-        return projectName(t.project_id) ?? <span className="opacity-30">-</span>;
+        return (
+          <select className={inlineSel} value={t.project_id ?? ""}
+            onChange={e => setField(t.id, { project_id: e.target.value || null }, "Nao foi possivel alterar o projeto.")}>
+            <option value="">Sem projeto</option>
+            {projects
+              .filter(pj => !t.client_id || pj.client_id === t.client_id || !pj.client_id)
+              .map(pj => <option key={pj.id} value={pj.id}>{pj.name}</option>)}
+          </select>
+        );
       case "client":
-        return clientName(t.client_id);
+        return (
+          <select className={inlineSel} value={t.client_id ?? ""}
+            onChange={e => setField(t.id,
+              { client_id: e.target.value || null, project_id: null },
+              "Nao foi possivel alterar o cliente.")}>
+            <option value="">Interno</option>
+            {adminClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        );
       case "assigned_to":
         return (
-          <button onClick={() => navigate(`/tarefas/${t.id}`)}
-            className="inline-flex items-center gap-1.5 hover:opacity-80"
-            title="Abrir a tarefa para alterar os responsaveis">
-            <AvatarStack people={peopleOf(t.id)} size={22} />
-          </button>
+          <div className="relative">
+            <button onClick={() => setPickerId(pickerId === t.id ? null : t.id)}
+              className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+              title="Alterar responsaveis">
+              <AvatarStack people={peopleOf(t.id)} size={22} />
+            </button>
+            {pickerId === t.id && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setPickerId(null)} />
+                <div className="absolute z-40 mt-1 left-0 w-60 border hairline rounded-xl shadow-lg p-2.5
+                                bg-white dark:bg-[#11141b]">
+                  <div className="text-[11px] uppercase tracking-wide opacity-50 mb-1.5">Responsaveis</div>
+                  {team.filter(m => m.active).length === 0 ? (
+                    <p className="text-[12px] opacity-45">Cadastre a equipe primeiro.</p>
+                  ) : (
+                    <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto">
+                      {team.filter(m => m.active).map(m => {
+                        const on = (assignees[t.id] ?? []).includes(m.id);
+                        return (
+                          <button key={m.id}
+                            onClick={() => toggleAssigneeNaLinha(t.id, m.id)}
+                            className="flex items-center gap-2 text-left text-[13px] px-1.5 py-1 rounded
+                                       hover:bg-black/[0.04] dark:hover:bg-white/[0.06]">
+                            <span className="w-3.5 shrink-0 text-[11px]" style={{ color: "var(--ok)" }}>
+                              {on ? "✓" : ""}
+                            </span>
+                            <Avatar name={m.name} color={m.color} size={20} />
+                            <span className="truncate">{m.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         );
       case "due_date":
-        return t.due_date
-          ? <span style={isOverdue(t) ? { color: "var(--bad)", fontWeight: 600 } : {}}>
-              {dueLabel(t.due_date, t.status)}
-            </span>
-          : <span className="opacity-30">-</span>;
+        return (
+          <div className="flex items-center gap-1">
+            <input type="date" value={t.due_date ?? ""}
+              className={cls(inlineSel, "w-[130px]")}
+              style={isOverdue(t) ? { color: "var(--bad)", fontWeight: 600 } : {}}
+              onChange={e => setField(t.id, { due_date: e.target.value || null }, "Nao foi possivel alterar o prazo.")} />
+            {t.due_date && isOverdue(t) && (
+              <span className="text-[10px] font-semibold shrink-0" style={{ color: "var(--bad)" }}>
+                {dueLabel(t.due_date, t.status).replace(/^.*\(/, "").replace(/\)$/, "")}
+              </span>
+            )}
+          </div>
+        );
       case "created_at":
         return <span className="opacity-60">{fmtDate(t.created_at.slice(0, 10))}</span>;
     }
@@ -720,7 +845,7 @@ export default function Tarefas() {
                         <div key={t.id} className="border hairline rounded-lg p-3 bg-white dark:bg-[#11141b] shadow-sm flex flex-col gap-2">
                           <div className="flex items-start justify-between gap-2">
                             <button className="text-[13px] font-medium leading-snug text-left hover:underline underline-offset-2"
-                              onClick={() => navigate(`/tarefas/${t.id}`)}>{t.title}</button>
+                              onClick={() => setPeekId(t.id)}>{t.title}</button>
                             <Badge label={PRIO[t.priority].label} color={PRIO[t.priority].color} />
                           </div>
                           {t.project_id && (
@@ -746,7 +871,7 @@ export default function Tarefas() {
                             <button className="text-sm w-9 h-8 flex items-center justify-center rounded border hairline disabled:opacity-25 shrink-0"
                               disabled={idx === 0} onClick={() => move(t.id, -1)} aria-label="Voltar etapa">‹</button>
                             <button className="text-[10px] uppercase tracking-wide opacity-45 hover:opacity-90 px-2.5 py-1.5"
-                              onClick={() => navigate(`/tarefas/${t.id}`)}>Abrir</button>
+                              onClick={() => setPeekId(t.id)}>Abrir</button>
                             <button className="text-sm w-9 h-8 flex items-center justify-center rounded border hairline disabled:opacity-25 shrink-0"
                               disabled={idx === COLUMNS.length - 1} onClick={() => move(t.id, 1)} aria-label="Avancar etapa">›</button>
                           </div>
@@ -799,7 +924,7 @@ export default function Tarefas() {
                           ))}
                           <td className="py-2.5 px-2 text-right">
                             <button className="text-[11px] opacity-35 hover:opacity-100"
-                              onClick={() => navigate(`/tarefas/${t.id}`)} title="Abrir tarefa">›</button>
+                              onClick={() => setPeekId(t.id)} title="Abrir tarefa">›</button>
                           </td>
                         </tr>
                       ))}
@@ -811,6 +936,34 @@ export default function Tarefas() {
           </div>
         )}
       </PageWrap>
+
+      {/* Painel lateral da tarefa, no lugar de trocar de pagina */}
+      {peekId && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+            onClick={() => setPeekId(null)} aria-hidden="true" />
+          <aside
+            className="fixed inset-y-0 right-0 z-50 w-full sm:w-[460px] lg:w-[520px] shadow-2xl border-l hairline
+                       flex flex-col"
+            style={{ background: "var(--paper)" }}
+            role="dialog" aria-label="Detalhes da tarefa"
+          >
+            <TarefaPainel
+              taskId={peekId}
+              variant="painel"
+              onClose={() => setPeekId(null)}
+              onChanged={(t, ppl) => {
+                setTasks(cur => cur.map(x => x.id === t.id ? t : x));
+                setAssignees(cur => ({ ...cur, [t.id]: ppl }));
+              }}
+              onDeleted={id => {
+                setTasks(cur => cur.filter(x => x.id !== id));
+                setPeekId(null);
+              }}
+            />
+          </aside>
+        </>
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth, useClientScope } from "../context/AuthContext";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 function cls(...args: (string | boolean | undefined | null)[]) {
   return args.filter(Boolean).join(" ");
@@ -98,6 +98,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
   const { user, role, clientModules, signOut } = useAuth();
   const { adminClientId, setAdminClientId, adminClients, myModules } = useClientScope();
 
+  // menu recolhido no desktop, lembrado entre sessoes
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("inpror.sidebar") === "recolhido"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("inpror.sidebar", collapsed ? "recolhido" : "aberto"); } catch { /* indisponivel */ }
+  }, [collapsed]);
+
   const nav = useMemo(() => {
     if (role === "admin") return NAV_STAFF;
     if (role === "agency") {
@@ -128,19 +136,21 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
 
   const handleNav = (path: string) => { navigate(path); setMobileOpen(false); };
 
-  const sidebarContent = (
-    <div className="w-56 flex flex-col h-full sidebar-brand">
+  const sidebarContent = (mini: boolean) => (
+    <div className={cls("flex flex-col h-full sidebar-brand transition-all", mini ? "w-16" : "w-56")}>
       {/* Logo */}
       <div className="px-4 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         {/* sidebar tem fundo verde escuro, por isso a logo branca */}
         <img src="/logo-inpror-branca.png" alt="inProR" width={36} height={36}
           className="w-9 h-9 shrink-0 object-contain" />
-        <div className="flex-1 min-w-0">
-          <div className="font-display font-bold text-base leading-tight text-white">inProR</div>
-          <div className="font-mono text-[9px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Painel de Gestao
+        {!mini && (
+          <div className="flex-1 min-w-0">
+            <div className="font-display font-bold text-base leading-tight text-white">inProR</div>
+            <div className="font-mono text-[9px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Painel de Gestao
+            </div>
           </div>
-        </div>
+        )}
         <button onClick={() => setMobileOpen(false)}
           className="md:hidden w-6 h-6 flex items-center justify-center text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
           ✕
@@ -148,7 +158,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
       </div>
 
       {/* Global client filter - admin */}
-      {(role === "admin" || role === "agency") && adminClients.length > 0 && (
+      {!mini && (role === "admin" || role === "agency") && adminClients.length > 0 && (
         <div className="px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="nav-group-label mb-1.5">Contexto</div>
           <select
@@ -171,16 +181,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
       <nav className="flex-1 overflow-y-auto py-3 space-y-3">
         {nav.map(g => (
           <div key={g.group}>
-            <div className="nav-group-label mb-1">{g.group}</div>
+            {!mini && <div className="nav-group-label mb-1">{g.group}</div>}
             <div className="space-y-0.5 px-2">
               {g.items.map(it => (
                 <button
                   key={it.path}
                   onClick={() => handleNav(it.path)}
-                  className={cls("nav-item", isActive(it.path) && "active")}
+                  className={cls("nav-item", isActive(it.path) && "active", mini && "justify-center px-0")}
+                  title={mini ? it.label : undefined}
                 >
                   <span className="font-mono text-xs w-3 text-center shrink-0" style={{ opacity: 0.6 }}>{it.icon}</span>
-                  <span>{it.label}</span>
+                  {!mini && <span>{it.label}</span>}
                 </button>
               ))}
             </div>
@@ -189,15 +200,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3 flex items-center gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+      <div className={cls("px-3 py-3 flex items-center gap-2", mini && "flex-col")} style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
           style={{ background: "var(--copper)" }}>
           {initials}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold truncate text-white capitalize">{displayName}</div>
-          <div className="font-mono text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>{roleLabel}</div>
-        </div>
+        {!mini && (
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold truncate text-white capitalize">{displayName}</div>
+            <div className="font-mono text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>{roleLabel}</div>
+          </div>
+        )}
         <button onClick={() => signOut()}
           className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-opacity"
           style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.5)" }}
@@ -216,11 +229,24 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, setMobileOpen }) =>
 
   return (
     <>
-      <div className="hidden md:block h-screen sticky top-0 shrink-0">{sidebarContent}</div>
+      <div className="hidden md:block h-screen sticky top-0 shrink-0 relative">
+        {sidebarContent(collapsed)}
+        {/* alterna entre menu completo e apenas icones */}
+        <button
+          onClick={() => setCollapsed(v => !v)}
+          className="absolute -right-3 top-20 w-6 h-6 rounded-full border hairline flex items-center justify-center
+                     text-[11px] shadow-sm z-10 transition-transform"
+          style={{ background: "var(--paper)", color: "var(--ink)" }}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {collapsed ? "›" : "‹"}
+        </button>
+      </div>
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <div className="relative h-full shadow-2xl">{sidebarContent}</div>
+          <div className="relative h-full shadow-2xl">{sidebarContent(false)}</div>
         </div>
       )}
     </>
