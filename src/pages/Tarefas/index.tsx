@@ -55,7 +55,7 @@ export default function Tarefas() {
     id ? (adminClients.find(c => c.id === id)?.name ?? "Cliente") : "Interno";
   const projectName = (id: string | null) =>
     id ? (projects.find(p => p.id === id)?.name ?? "Projeto") : null;
-  const member = (id: string | null) => (id ? team.find(m => m.id === id) : undefined);
+  const eu = team.find(m => m.id === myMemberId);
   // uma tarefa pode ter varias pessoas; a lista vem de task_assignees
   const peopleOf = (taskId: string) =>
     (assignees[taskId] ?? []).map(id => team.find(m => m.id === id)).filter(Boolean) as typeof team;
@@ -63,7 +63,6 @@ export default function Tarefas() {
     const names = peopleOf(t.id).map(m => m.name);
     return names.length ? names.join(", ") : (t.assigned_to ?? null);
   };
-  const hasAssignee = (t: TaskRow, memberId: string) => (assignees[t.id] ?? []).includes(memberId);
 
   useEffect(() => {
     if (authLoading) return;
@@ -201,26 +200,6 @@ export default function Tarefas() {
 
   const setStatus = (id: string, s: Status) =>
     patchTask(id, { status: s }, "Nao foi possivel alterar a etapa.");
-
-  // regrava a lista inteira de responsaveis da tarefa
-  async function saveAssignees(taskId: string, memberIds: string[]) {
-    const backup = assignees[taskId] ?? [];
-    setAssignees(cur => ({ ...cur, [taskId]: memberIds }));
-    const del = await supabase.from("task_assignees").delete().eq("task_id", taskId);
-    if (del.error) {
-      setAssignees(cur => ({ ...cur, [taskId]: backup }));
-      setErro("Nao foi possivel alterar os responsaveis.");
-      return;
-    }
-    if (memberIds.length) {
-      const ins = await supabase.from("task_assignees")
-        .insert(memberIds.map(member_id => ({ task_id: taskId, member_id })));
-      if (ins.error) {
-        setAssignees(cur => ({ ...cur, [taskId]: backup }));
-        setErro("Nao foi possivel alterar os responsaveis.");
-      }
-    }
-  }
 
   function toggleDone(t: TaskRow) {
     setStatus(t.id, t.status === "concluida" ? "em_andamento" : "concluida");
@@ -396,7 +375,7 @@ export default function Tarefas() {
                            flex items-center gap-3 min-w-[170px] transition-colors text-left"
                 style={fa === "eu" ? { borderColor: "var(--brand)", boxShadow: "0 0 0 1px var(--brand)" } : {}}
               >
-                <Avatar name={member(myMemberId)?.name ?? "Eu"} color={member(myMemberId)?.color} size={34} />
+                <Avatar name={eu?.name ?? "Eu"} color={eu?.color} size={34} />
                 <div className="min-w-0">
                   <div className="text-[13px] font-semibold truncate">Minhas tarefas</div>
                   <div className="text-[11px] opacity-55">

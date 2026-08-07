@@ -137,7 +137,7 @@ export default function Equipe() {
   async function handleDelete(id: string) {
     const s = statsFor(id);
     setConfirmId(null);
-    // as tarefas nao somem: assignee_id fica nulo pela FK
+    // as tarefas nao somem: os vinculos em task_assignees caem pelo cascade
     const { error } = await supabase.from("team_members").delete().eq("id", id);
     if (error) { setErro("Nao foi possivel remover: " + error.message); return; }
     await reloadTeam();

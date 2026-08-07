@@ -27,6 +27,7 @@ interface AuthContextType {
   team: TeamMember[]
   myMemberId: string | null
   myModules: string[] | null
+  scopeLoading: boolean
   reloadTeam: () => Promise<void>
 }
 
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
   team: [],
   myMemberId: null,
   myModules: null,
+  scopeLoading: true,
   reloadTeam: async () => {},
 })
 
@@ -56,6 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminClients, setAdminClients] = useState<ClientOption[]>([])
   const [clientModules, setClientModules] = useState<string[] | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
+  const [teamLoading, setTeamLoading] = useState(true)
+  const [roleLoading, setRoleLoading] = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -69,7 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!session?.user?.id) { setRole(null); setClientId(null); return }
+    if (!session?.user?.id) { setRole(null); setClientId(null); setRoleLoading(false); return }
+    setRoleLoading(true)
     supabase
       .from("user_roles")
       .select("role, client_id")
@@ -88,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .single()
           setClientModules(clientData?.modules ?? null)
         }
+        setRoleLoading(false)
       })
   }, [session?.user?.id])
 
@@ -100,15 +106,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Equipe: usada para atribuir tarefas e para o atalho "minhas tarefas"
   const reloadTeam = async () => {
+    setTeamLoading(true)
     const { data } = await supabase
       .from("team_members")
       .select("id,user_id,name,email,role_title,color,active,modules")
       .order("name")
     setTeam((data as TeamMember[]) ?? [])
+    setTeamLoading(false)
   }
 
   useEffect(() => {
-    if (!session?.user?.id) { setTeam([]); return }
+    if (!session?.user?.id) { setTeam([]); setTeamLoading(false); return }
     reloadTeam()
   }, [session?.user?.id])
 
@@ -116,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const myMemberId = meMember?.id ?? null
   // admin nao tem restricao de modulo; equipe usa o que foi liberado
   const myModules = role === "agency" ? (meMember?.modules ?? []) : null
+  // as permissoes so podem ser avaliadas depois que papel e equipe carregam
+  const scopeLoading = loading || roleLoading || teamLoading
 
   const signOut = async () => {
     await supabase.auth.signOut()
@@ -127,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       session, user: session?.user ?? null, role, clientId, clientModules,
       loading, signOut, adminClientId, setAdminClientId, adminClients,
-      team, myMemberId, myModules, reloadTeam,
+      team, myMemberId, myModules, scopeLoading, reloadTeam,
     }}>
       {children}
     </AuthContext.Provider>
@@ -138,7 +148,7 @@ export const useAuth = () => useContext(AuthContext)
 
 export function useClientScope() {
   const { role, clientId, loading, adminClientId, setAdminClientId, adminClients,
-          team, myMemberId, myModules, reloadTeam } = useAuth()
+          team, myMemberId, myModules, scopeLoading, reloadTeam } = useAuth()
   const isAdmin  = role === "admin"
   const isAgency = role === "agency"
   return {
@@ -150,6 +160,7 @@ export function useClientScope() {
     myModules,
     scopedClientId: role === "client" ? clientId : adminClientId,
     authLoading: loading,
+    scopeLoading,
     adminClientId,
     setAdminClientId,
     adminClients,

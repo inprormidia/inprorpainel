@@ -21,7 +21,7 @@ const fmtDate = (d: string) => {
 const emptyForm = () => ({ title: "", date: today(), notes: "" });
 
 export default function Reunioes() {
-  const { scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const { scopedClientId, authLoading, isAdmin, isStaff, adminClientId, setAdminClientId, adminClients } = useClientScope();
   const [rows, setRows]       = useState<MeetingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -107,7 +107,7 @@ export default function Reunioes() {
         subtitle="Agenda e atas de reuniao"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isStaff && (
               <select className="text-xs border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                 value={adminClientId ?? ""} onChange={e => setAdminClientId(e.target.value || null)}>
                 <option value="">Todos os clientes</option>

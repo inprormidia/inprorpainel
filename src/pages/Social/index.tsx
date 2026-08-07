@@ -42,7 +42,7 @@ const emptyForm = () => ({
 });
 
 export default function Social() {
-  const { scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const { scopedClientId, authLoading, isStaff, adminClientId, setAdminClientId, adminClients } = useClientScope();
   const [articles, setArticles] = useState<ArticleRow[]>([]);
   const [loading, setLoading]   = useState(true);
   const [statusFilter, setStatusFilter] = useState<ArticleStatus | "todos">("todos");
@@ -134,7 +134,7 @@ export default function Social() {
         subtitle="Pipeline de conteudo e publicacoes"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isStaff && (
               <select className="text-xs border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                 value={adminClientId ?? ""} onChange={e => setAdminClientId(e.target.value || null)}>
                 <option value="">Selecionar cliente...</option>

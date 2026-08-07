@@ -38,7 +38,7 @@ export default function App() {
           <Route path="/cardapio"            element={<ModuleRoute module="cardapio"><Cardapio /></ModuleRoute>} />
           <Route path="/projetos"            element={<ModuleRoute module="projetos"><Projetos /></ModuleRoute>} />
           <Route path="/tarefas"             element={<ModuleRoute module="tarefas"><Tarefas /></ModuleRoute>} />
-          <Route path="/tarefas/:id"         element={<TarefaDetalhe />} />
+          <Route path="/tarefas/:id"         element={<ModuleRoute module="tarefas"><TarefaDetalhe /></ModuleRoute>} />
           <Route path="/estrategias"         element={<ModuleRoute module="estrategias"><Estrategias /></ModuleRoute>} />
           <Route path="/metas-kpis"          element={<ModuleRoute module="metas-kpis"><MetasKpis /></ModuleRoute>} />
           <Route path="/relatorios"          element={<ModuleRoute module="relatorios"><Relatorios /></ModuleRoute>} />

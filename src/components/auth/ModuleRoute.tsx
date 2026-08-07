@@ -3,14 +3,14 @@ import { Navigate } from "react-router";
 import { useClientScope } from "../../context/AuthContext";
 import { PageWrap, EmptyState, Btn } from "../ui/InprorComponents";
 
-// Bloqueia o acesso direto pela URL a um modulo que o membro nao tem.
+// Bloqueia o acesso direto pela URL a um modulo que a pessoa nao tem.
 // A protecao real esta nas policies do banco; isto evita a tela vazia
 // e deixa claro que o acesso precisa ser liberado.
 export default function ModuleRoute({ module, children }: { module: string; children: ReactNode }) {
-  const { isAdmin, isAgency, canSeeModule, authLoading } = useClientScope();
+  const { isAgency, canSeeModule, scopeLoading } = useClientScope();
 
-  if (authLoading) return null;
-  if (isAdmin) return <>{children}</>;
+  // sem esperar o papel e a equipe carregarem, todo modulo pareceria bloqueado
+  if (scopeLoading) return null;
 
   if (isAgency && !canSeeModule(module)) {
     return (
@@ -24,18 +24,14 @@ export default function ModuleRoute({ module, children }: { module: string; chil
     );
   }
 
-  if (!isAgency && !isAdmin) {
-    // cliente segue com as regras de modulo dele, ja aplicadas na navegacao
-    return <>{children}</>;
-  }
-
+  // admin e cliente seguem as proprias regras, ja aplicadas na navegacao e no banco
   return <>{children}</>;
 }
 
 // Rota exclusiva do dono da agencia
 export function AdminOnlyRoute({ children }: { children: ReactNode }) {
-  const { isAdmin, authLoading } = useClientScope();
-  if (authLoading) return null;
+  const { isAdmin, scopeLoading } = useClientScope();
+  if (scopeLoading) return null;
   if (!isAdmin) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

@@ -7,15 +7,15 @@ import PageMeta from "../../components/common/PageMeta";
 interface Client { id: string; name: string; active: boolean; }
 
 export default function Dashboard() {
-  const { isAdmin, scopedClientId, adminClients } = useClientScope();
+  const { isStaff, scopedClientId, adminClients } = useClientScope();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAdmin) { setLoading(false); return; }
+    if (!isStaff) { setLoading(false); return; }
     supabase.from("clients").select("id, name, active").order("name")
       .then(({ data }) => { setClients((data as Client[]) ?? []); setLoading(false); });
-  }, [isAdmin]);
+  }, [isStaff]);
 
   const activeCount = clients.filter(c => c.active).length;
 
@@ -24,9 +24,9 @@ export default function Dashboard() {
       <PageMeta title="Dashboard | inProR Painel" />
       <PageWrap
         title="Dashboard"
-        subtitle={isAdmin ? "Visao geral da agencia inProR" : "Resultados da sua conta"}
+        subtitle={isStaff ? "Visao geral da agencia inProR" : "Resultados da sua conta"}
       >
-        {isAdmin ? (
+        {isStaff ? (
           <>
             <KpiGrid>
               <KpiCard label="Clientes Ativos" value={loading ? "..." : activeCount} />
@@ -72,7 +72,7 @@ export default function Dashboard() {
           </>
         )}
 
-        {isAdmin && scopedClientId && (
+        {isStaff && scopedClientId && (
           <p className="font-mono text-[10px] opacity-40 mt-4">
             Filtrando por: {adminClients.find(c => c.id === scopedClientId)?.name}
           </p>

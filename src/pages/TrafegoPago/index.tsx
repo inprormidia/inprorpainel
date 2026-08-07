@@ -70,7 +70,7 @@ const emptyForm = () => ({
 });
 
 export default function TrafegoPago() {
-  const { scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const { scopedClientId, authLoading, isStaff, adminClientId, setAdminClientId, adminClients } = useClientScope();
   const [rows, setRows]         = useState<AdsRow[]>([]);
   const [loading, setLoading]   = useState(true);
   const [plat, setPlat]         = useState<PFilter>("todos");
@@ -160,7 +160,7 @@ export default function TrafegoPago() {
         subtitle="Performance de anuncios pagos por plataforma"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isStaff && (
               <select className="text-xs border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                 value={adminClientId ?? ""} onChange={e => setAdminClientId(e.target.value || null)}>
                 <option value="">Selecionar cliente...</option>

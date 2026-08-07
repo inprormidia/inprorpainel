@@ -36,7 +36,7 @@ const fmtDate = (iso: string) => {
 const emptyForm = () => ({ title: "", period: lastMonth(), url: "" });
 
 export default function Relatorios() {
-  const { scopedClientId, authLoading, isAdmin, adminClientId, setAdminClientId, adminClients } = useClientScope();
+  const { scopedClientId, authLoading, isAdmin, isStaff, adminClientId, setAdminClientId, adminClients } = useClientScope();
   const [rows, setRows]       = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -95,7 +95,7 @@ export default function Relatorios() {
         subtitle="Relatorios de performance entregues"
         action={
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {isStaff && (
               <select className="text-xs border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
                 value={adminClientId ?? ""} onChange={e => setAdminClientId(e.target.value || null)}>
                 <option value="">Todos os clientes</option>
