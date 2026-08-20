@@ -24,7 +24,14 @@ function Imagem({ origem, legenda }: { origem: string; legenda?: string }) {
 
   useEffect(() => {
     let vivo = true;
-    if (!origem.startsWith("anexo:")) { setSrc(origem); return; }
+    // So arquivo do proprio painel ou endereco seguro. Sem isto, um
+    // texto colado poderia apontar para um servidor de fora, que
+    // saberia quem abriu o documento e quando.
+    if (!origem.startsWith("anexo:")) {
+      if (/^https:\/\//i.test(origem)) setSrc(origem);
+      else setFalhou(true);
+      return;
+    }
     const caminho = origem.slice("anexo:".length);
     supabase.storage.from("anexos").createSignedUrl(caminho, 3600).then(({ data, error }) => {
       if (!vivo) return;
@@ -37,7 +44,7 @@ function Imagem({ origem, legenda }: { origem: string; legenda?: string }) {
   if (falhou)
     return (
       <div className="border border-dashed hairline rounded-lg py-6 text-center text-[12px] opacity-45 my-3">
-        Imagem indisponivel
+        Imagem indisponivel ou de origem nao permitida
       </div>
     );
 
