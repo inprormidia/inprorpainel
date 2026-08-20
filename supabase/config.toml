@@ -1,0 +1,4 @@
+# Identifica o projeto para o Supabase CLI.
+# A funcao mantem a validacao de token ligada (padrao): o painel
+# envia o token da sessao, e ela ainda confere se quem chamou e admin.
+project_id = "jcdforwbxqkqdplvbris"

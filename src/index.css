@@ -164,6 +164,16 @@ html.dark {
     padding: 0 16px 2px;
   }
   .filter-row::-webkit-scrollbar { display: none; }
+  /* faixa horizontal de cartoes: rola sem mostrar a barra, que
+     no celular ocupava altura e cortava o visual */
+  .faixa-rolavel {
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* dentro de um container flex em coluna, um elemento com overflow
+       perde a altura minima automatica e acaba esmagado */
+    flex-shrink: 0;
+  }
+  .faixa-rolavel::-webkit-scrollbar { display: none; }
   @media (min-width: 640px) {
     .filter-row {
       flex-wrap: wrap;
@@ -189,6 +199,20 @@ html.dark {
       padding-top: 10px;
       padding-bottom: 10px;
     }
+  }
+  /* entrada do painel lateral da tarefa */
+  @keyframes painel-entra {
+    from { transform: translateX(16px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  @keyframes veu-entra {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .painel-entra { animation: painel-entra .16s ease-out; }
+  .veu-entra    { animation: veu-entra .16s ease-out; }
+  @media (prefers-reduced-motion: reduce) {
+    .painel-entra, .veu-entra { animation: none; }
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); border-radius: 3px; }

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState, useRef, useEffect, useCallback } from "react";
 
 // ── Helpers ────────────────────────────────────────────────────
 export function cls(...args: (string | boolean | undefined | null)[]) {
@@ -15,7 +15,8 @@ export function PageWrap({ title, subtitle, action, children }: {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
         <div className="min-w-0">
           <h1 className="font-display font-bold text-2xl sm:text-3xl tracking-tight" style={{ color: "var(--brand)" }}>{title}</h1>
-          {subtitle && <p className="text-[13px] opacity-55 mt-1">{subtitle}</p>}
+          {/* no celular o subtitulo so consumia altura antes do conteudo */}
+          {subtitle && <p className="hidden sm:block text-[13px] opacity-55 mt-1">{subtitle}</p>}
         </div>
         {action && (
           <div className="shrink-0 w-full sm:w-auto [&>div]:w-full sm:[&>div]:w-auto [&_select]:flex-1 sm:[&_select]:flex-none [&_select]:min-w-0">
@@ -35,7 +36,7 @@ export function KpiCard({ label, value, sub, delta }: {
   const deltaColor = delta === undefined ? "" : delta >= 0 ? "var(--ok)" : "var(--bad)";
   const deltaSign  = delta === undefined ? "" : delta >= 0 ? "+" : "";
   return (
-    <div className="border hairline rounded-xl p-3 sm:p-4 bg-white dark:bg-[#11141b] flex flex-col gap-1.5 sm:gap-2.5 shadow-sm min-w-0">
+    <div className="border hairline rounded-xl px-3 py-2.5 sm:p-4 bg-white dark:bg-[#11141b] flex flex-col gap-1 sm:gap-2.5 shadow-sm min-w-0">
       <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide opacity-50 truncate">{label}</span>
       {/* Valor encolhe no mobile para nao estourar o card */}
       <div className="font-mono text-[19px] sm:text-[22px] md:text-[26px] leading-none font-bold tabular truncate"
@@ -59,7 +60,7 @@ export function KpiCard({ label, value, sub, delta }: {
 // ── KpiGrid ────────────────────────────────────────────────────
 export function KpiGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
       {children}
     </div>
   );
@@ -181,35 +182,279 @@ export function AvatarStack({ people, size = 22, max = 3, empty = "Sem responsav
   );
 }
 
-// ── AssigneePicker ─────────────────────────────────────────────
-// Selecao de varias pessoas. Chips funcionam melhor que multi-select no celular.
-export function AssigneePicker({ people, selected, onToggle, emptyHint }: {
-  people: { id: string; name: string; color?: string | null; role_title?: string | null }[];
-  selected: string[];
-  onToggle: (id: string) => void;
-  emptyHint?: string;
+// ── CellPicker ─────────────────────────────────────────────────
+// Celula de tabela que se le como texto e vira menu ao clicar.
+// O menu usa posicao fixa porque a tabela rola na horizontal e
+// recortaria qualquer coisa posicionada por dentro dela.
+export function CellPicker({
+  trigger, children, width = 230, title, busca, placeholder, variante = "celula",
+  aoCriar, criarRotulo,
+}: {
+  trigger: ReactNode;
+  // recebe o fechar e o termo digitado na busca
+  children: (fechar: () => void, termo: string) => ReactNode;
+  width?: number;
+  title?: string;
+  // mostra campo de busca: util quando a lista e longa
+  busca?: boolean;
+  placeholder?: string;
+  variante?: "celula" | "campo";
+  // permite cadastrar uma opcao nova sem sair da tela
+  aoCriar?: (nome: string) => Promise<void>;
+  criarRotulo?: string;
 }) {
-  if (!people.length)
-    return <p className="text-[12px] opacity-45">{emptyHint ?? "Nenhum membro cadastrado ainda."}</p>;
+  const [pos, setPos] = useState<{ top: number; left: number; acima: boolean } | null>(null);
+  const [termo, setTermo] = useState("");
+  const [criando, setCriando] = useState(false);
+  const [nomeNovo, setNomeNovo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const btnRef  = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const fechar = useCallback(() => {
+    setPos(null); setTermo(""); setCriando(false); setNomeNovo("");
+  }, []);
+
+  function abrir() {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margem = 10;
+    const larg = variante === "campo" ? Math.max(width, r.width) : width;
+    const left = Math.min(Math.max(margem, r.left), window.innerWidth - larg - margem);
+    // altura util disponivel abaixo e acima do campo
+    const abaixo = window.innerHeight - r.bottom - margem;
+    const acima  = r.top - margem;
+    const cabeAbaixo = abaixo >= 220 || abaixo >= acima;
+    setPos({
+      top: cabeAbaixo ? r.bottom + 4 : Math.max(margem, r.top - 4),
+      left,
+      acima: !cabeAbaixo,
+    });
+  }
+
+  useEffect(() => {
+    if (!pos) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    // rolar dentro do proprio menu nao pode fecha-lo
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      fechar();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", fechar);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", fechar);
+    };
+  }, [pos, fechar]);
+
+  const larguraMenu = variante === "campo"
+    ? Math.max(width, btnRef.current?.getBoundingClientRect().width ?? width)
+    : width;
+
+  // altura maxima conforme o espaco real na tela
+  const alturaMax = pos
+    ? (pos.acima ? pos.top - 12 : window.innerHeight - pos.top - 12)
+    : 320;
+
+  async function confirmarCriacao() {
+    const nome = nomeNovo.trim();
+    if (!nome || !aoCriar) return;
+    setSalvando(true);
+    await aoCriar(nome);
+    setSalvando(false);
+    setCriando(false);
+    setNomeNovo("");
+  }
 
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {people.map(p => {
-        const on = selected.includes(p.id);
-        return (
-          <button key={p.id} type="button" onClick={() => onToggle(p.id)}
-            className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full border transition-colors text-[12px]"
-            style={on
-              ? { background: "var(--brand)", color: "white", borderColor: "var(--brand)" }
-              : { borderColor: "var(--line-light)" }}
-            title={p.role_title ?? p.name}
-            aria-pressed={on}
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => (pos ? fechar() : abrir())}
+        title={title}
+        className={cls(
+          "w-full text-left rounded flex items-center gap-1.5 transition-colors",
+          variante === "campo"
+            ? "px-2 h-8 justify-between border border-transparent hover:border-[color:var(--line-light)]"
+            : "px-1.5 h-7",
+          "hover:bg-black/[0.05] dark:hover:bg-white/[0.07]",
+          pos && "bg-black/[0.05] dark:bg-white/[0.07]",
+        )}
+      >
+        <span className="min-w-0 flex-1 flex items-center gap-1.5 truncate">{trigger}</span>
+        {variante === "campo" && (
+          <span className="text-[10px] opacity-50 shrink-0">▾</span>
+        )}
+      </button>
+
+      {pos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={fechar} aria-hidden="true" />
+          <div
+            ref={menuRef}
+            className="fixed z-50 border hairline rounded-xl shadow-lg bg-white dark:bg-[#11141b] flex flex-col"
+            style={{
+              top: pos.top, left: pos.left, width: larguraMenu,
+              maxHeight: Math.max(180, Math.min(360, alturaMax)),
+              transform: pos.acima ? "translateY(-100%)" : undefined,
+            }}
+            role="menu"
           >
-            <Avatar name={p.name} color={on ? "rgba(255,255,255,.25)" : p.color} size={20} />
-            {p.name}
+            {busca && (
+              <div className="p-1.5 pb-1 shrink-0">
+                <input
+                  autoFocus
+                  className="w-full text-[13px] border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
+                  placeholder={placeholder ?? "Buscar..."}
+                  value={termo}
+                  onChange={e => setTermo(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Escape") fechar(); }}
+                />
+              </div>
+            )}
+
+            {/* a area de opcoes e a unica que rola */}
+            <div className="overflow-y-auto flex-1 p-1.5 pt-0.5">
+              {children(fechar, termo.trim().toLowerCase())}
+            </div>
+
+            {aoCriar && (
+              <div className="border-t hairline p-1.5 shrink-0">
+                {criando ? (
+                  <div className="flex flex-col gap-1.5">
+                    <input
+                      autoFocus
+                      className="w-full text-[13px] border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b]"
+                      placeholder="Nome"
+                      value={nomeNovo}
+                      onChange={e => setNomeNovo(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") confirmarCriacao();
+                        if (e.key === "Escape") { setCriando(false); setNomeNovo(""); }
+                      }}
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        className="text-[12px] font-semibold px-2.5 py-1 rounded"
+                        style={{ background: "var(--brand)", color: "white" }}
+                        onClick={confirmarCriacao} disabled={salvando || !nomeNovo.trim()}>
+                        {salvando ? "Salvando..." : "Criar"}
+                      </button>
+                      <button className="text-[12px] px-2 py-1 opacity-55"
+                        onClick={() => { setCriando(false); setNomeNovo(""); }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="w-full text-left text-[13px] px-2 py-1.5 rounded font-medium
+                               hover:bg-black/[0.05] dark:hover:bg-white/[0.07]"
+                    style={{ color: "var(--copper)" }}
+                    onClick={() => { setCriando(true); setNomeNovo(termo); }}>
+                    + {criarRotulo ?? "Adicionar"}
+                    {termo && <span className="opacity-70"> {termo}</span>}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// Item de menu com marca de selecionado
+export function MenuItem({ selecionado, onClick, children }: {
+  selecionado?: boolean; onClick: () => void; children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      role="menuitem"
+      className="w-full flex items-center gap-2 text-left text-[13px] px-2 py-1.5 rounded
+                 hover:bg-black/[0.05] dark:hover:bg-white/[0.07]"
+    >
+      <span className="w-3.5 shrink-0 text-[11px]" style={{ color: "var(--ok)" }}>
+        {selecionado ? "✓" : ""}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+    </button>
+  );
+}
+
+// ── MenuData ───────────────────────────────────────────────────
+// Campo de data para usar dentro de um menu. Guarda o valor em
+// rascunho e so grava quando o usuario confirma, porque o input
+// nativo dispara change a cada pedaco digitado: sem isso, quem
+// digita a data no teclado tem o menu fechado no meio do caminho.
+export function MenuData({ valor, onSalvar, onFechar, atalhos = true, permiteLimpar = true }: {
+  valor: string | null;
+  onSalvar: (data: string | null) => void;
+  onFechar: () => void;
+  atalhos?: boolean;
+  permiteLimpar?: boolean;
+}) {
+  const [rascunho, setRascunho] = useState(valor ?? "");
+  const valido = /^\d{4}-\d{2}-\d{2}$/.test(rascunho);
+  const mudou = rascunho !== (valor ?? "");
+
+  const emDias = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const aplicar = (data: string | null) => { onSalvar(data); onFechar(); };
+
+  return (
+    <div className="p-1 flex flex-col gap-2">
+      <input
+        type="date"
+        className="text-sm border hairline rounded px-2 py-1.5 bg-white dark:bg-[#11141b] w-full"
+        value={rascunho}
+        onChange={e => setRascunho(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter" && valido) aplicar(rascunho);
+          if (e.key === "Escape") onFechar();
+        }}
+      />
+
+      {atalhos && (
+        <div className="flex flex-wrap gap-1">
+          <button className="text-[11px] px-2 py-1 rounded border hairline hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            onClick={() => aplicar(emDias(0))}>Hoje</button>
+          <button className="text-[11px] px-2 py-1 rounded border hairline hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            onClick={() => aplicar(emDias(1))}>Amanha</button>
+          <button className="text-[11px] px-2 py-1 rounded border hairline hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            onClick={() => aplicar(emDias(7))}>Em 7 dias</button>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 border-t hairline pt-2">
+        <button
+          className="text-[12px] font-semibold px-2.5 py-1 rounded disabled:opacity-35"
+          style={{ background: "var(--brand)", color: "white" }}
+          disabled={!valido || !mudou}
+          onClick={() => aplicar(rascunho)}>
+          Aplicar
+        </button>
+        {permiteLimpar && valor && (
+          <button className="text-[12px] px-2 py-1 rounded border hairline"
+            style={{ color: "var(--bad)" }}
+            onClick={() => aplicar(null)}>
+            Limpar
           </button>
-        );
-      })}
+        )}
+        <button className="text-[12px] px-2 py-1 opacity-55 ml-auto" onClick={onFechar}>
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }

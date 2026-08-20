@@ -29,6 +29,7 @@ interface AuthContextType {
   myModules: string[] | null
   scopeLoading: boolean
   reloadTeam: () => Promise<void>
+  reloadClients: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -47,6 +48,7 @@ const AuthContext = createContext<AuthContextType>({
   myModules: null,
   scopeLoading: true,
   reloadTeam: async () => {},
+  reloadClients: async () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -97,11 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [session?.user?.id])
 
+  // para a equipe, a policy de clients ja devolve somente os clientes atribuidos
+  const reloadClients = async () => {
+    const { data } = await supabase.from("clients").select("id, name, active").order("name")
+    setAdminClients((data as ClientOption[]) ?? [])
+  }
+
   useEffect(() => {
     if (role !== "admin" && role !== "agency") { setAdminClients([]); setAdminClientId(null); return }
-    // para a equipe, a policy de clients ja devolve somente os clientes atribuidos
-    supabase.from("clients").select("id, name, active").order("name")
-      .then(({ data }) => { setAdminClients((data as ClientOption[]) ?? []) })
+    reloadClients()
   }, [role])
 
   // Equipe: usada para atribuir tarefas e para o atalho "minhas tarefas"
@@ -137,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       session, user: session?.user ?? null, role, clientId, clientModules,
       loading, signOut, adminClientId, setAdminClientId, adminClients,
-      team, myMemberId, myModules, scopeLoading, reloadTeam,
+      team, myMemberId, myModules, scopeLoading, reloadTeam, reloadClients,
     }}>
       {children}
     </AuthContext.Provider>
@@ -148,7 +154,7 @@ export const useAuth = () => useContext(AuthContext)
 
 export function useClientScope() {
   const { role, clientId, loading, adminClientId, setAdminClientId, adminClients,
-          team, myMemberId, myModules, scopeLoading, reloadTeam } = useAuth()
+          team, myMemberId, myModules, scopeLoading, reloadTeam, reloadClients } = useAuth()
   const isAdmin  = role === "admin"
   const isAgency = role === "agency"
   return {
@@ -167,5 +173,6 @@ export function useClientScope() {
     team,
     myMemberId,
     reloadTeam,
+    reloadClients,
   }
 }
