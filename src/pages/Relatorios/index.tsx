@@ -17,6 +17,12 @@ interface ReportRow {
   created_at: string; updated_at?: string | null;
 }
 
+interface ArquivoRow {
+  id: string; name: string; storage_path: string;
+  mime: string | null; size_bytes: number | null;
+  created_at: string;
+}
+
 interface DeptLite { id: string; name: string; color: string; ordem: number; active: boolean; }
 
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -28,6 +34,19 @@ const fmtDataCurta = (d: string | null) => {
 };
 
 const LIMITE_MB = 25;
+
+const fmtTamanho = (b: number | null) => {
+  if (!b) return "";
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// Marcador curto no lugar de icone: le melhor e nao depende de imagem
+const extensao = (nome: string) => {
+  const e = /\.([a-z0-9]{1,5})$/i.exec(nome);
+  return e ? e[1].toUpperCase().slice(0, 4) : "ARQ";
+};
 
 const lastMonth = () => {
   const d = new Date();
@@ -103,6 +122,10 @@ export default function Relatorios() {
   const [subindo, setSubindo]   = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
 
+  // documentos guardados junto do relatorio, fora do texto
+  const [anexos, setAnexos] = useState<ArquivoRow[]>([]);
+  const [confirmAnexo, setConfirmAnexo] = useState<string | null>(null);
+
   const [criando, setCriando] = useState(false);
   const [arrastando, setArrastando] = useState(false);
   const [depts, setDepts]     = useState<DeptLite[]>([]);
@@ -110,7 +133,8 @@ export default function Relatorios() {
   const [filtroDept, setFiltroDept] = useState<string>("todos");
   const [filtroTag, setFiltroTag]   = useState<string>("todas");
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef  = useRef<HTMLInputElement>(null);
+  const anexoRef = useRef<HTMLInputElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -130,6 +154,18 @@ export default function Relatorios() {
   }, [scopedClientId, adminClientId, isStaff, authLoading]);
 
   const aberto = rows.find(r => r.id === abertoId) ?? null;
+
+  useEffect(() => {
+    setConfirmAnexo(null);
+    if (!abertoId) { setAnexos([]); return; }
+    let vivo = true;
+    supabase.from("report_files")
+      .select("id,name,storage_path,mime,size_bytes,created_at")
+      .eq("report_id", abertoId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (vivo) setAnexos((data as ArquivoRow[]) ?? []); });
+    return () => { vivo = false; };
+  }, [abertoId]);
 
   const clientName = (id: string | null) =>
     id ? (adminClients.find(c => c.id === id)?.name ?? "Cliente") : "Interno";
@@ -325,9 +361,62 @@ export default function Relatorios() {
     setSubindo(false);
   }
 
+  // ── Documentos guardados junto do relatorio ──────────────────
+  // Recibo de faturamento, contrato, planilha: coisas que acompanham
+  // o relatorio sem precisar aparecer no meio do texto.
+  async function anexarDocumento(file: File) {
+    if (!aberto || !user) return;
+    if (file.size > LIMITE_MB * 1024 * 1024) {
+      setErro(`Arquivo acima de ${LIMITE_MB} MB.`); return;
+    }
+    setSubindo(true);
+    setErro(null);
+    const limpo = file.name.replace(/[^\w.-]+/g, "_");
+    const caminho = `relatorios/${aberto.id}/documentos/${Date.now()}-${limpo}`;
+
+    const up = await supabase.storage.from("anexos").upload(caminho, file, { upsert: false });
+    if (up.error) { setSubindo(false); setErro("Falha no envio: " + up.error.message); return; }
+
+    const { data, error } = await supabase.from("report_files").insert({
+      report_id: aberto.id,
+      author_id: user.id,
+      name: file.name,
+      storage_path: caminho,
+      mime: file.type || null,
+      size_bytes: file.size,
+    }).select("id,name,storage_path,mime,size_bytes,created_at").single();
+
+    if (error || !data) {
+      await supabase.storage.from("anexos").remove([caminho]);
+      setSubindo(false);
+      setErro("Nao foi possivel registrar o documento: " + (error?.message ?? ""));
+      return;
+    }
+    setAnexos(a => [data as ArquivoRow, ...a]);
+    setSubindo(false);
+  }
+
+  // O bucket e privado: cada abertura pede um endereco temporario
+  async function abrirDocumento(a: ArquivoRow) {
+    const { data, error } = await supabase.storage
+      .from("anexos").createSignedUrl(a.storage_path, 300);
+    if (error || !data) { setErro("Nao foi possivel abrir esse documento."); return; }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function removerDocumento(a: ArquivoRow) {
+    setConfirmAnexo(null);
+    const { error } = await supabase.from("report_files").delete().eq("id", a.id);
+    if (error) { setErro("Nao foi possivel remover: " + error.message); return; }
+    await supabase.storage.from("anexos").remove([a.storage_path]);
+    setAnexos(lista => lista.filter(x => x.id !== a.id));
+  }
+
   // ── Documento aberto ─────────────────────────────────────────
   if (aberto) {
     const podeEditar = isStaff;
+    const corpoAtual = editando ? corpo : (aberto.content ?? "");
+    const documentos = anexos.filter(a => !corpoAtual.includes(a.storage_path));
     return (
       <>
         <PageMeta title={`${aberto.title} | inProR`} />
@@ -574,6 +663,75 @@ export default function Relatorios() {
               )}
             </SectionCard>
           </div>
+
+          {/* Documentos que acompanham o relatorio sem entrar no texto.
+              Imagens ja usadas no corpo nao se repetem aqui. */}
+          <div className="mt-4">
+            <SectionCard>
+              <div className="flex items-center justify-between gap-3 mb-2.5">
+                <h3 className="text-[13px] font-semibold">Documentos</h3>
+                {podeEditar && (
+                  <button
+                    className="text-[12px] px-2.5 py-1.5 rounded border hairline
+                               hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                    onClick={() => anexoRef.current?.click()} disabled={subindo}>
+                    {subindo ? "Enviando..." : "Anexar documento"}
+                  </button>
+                )}
+              </div>
+
+              {documentos.length === 0 ? (
+                <p className="text-[12px] opacity-40 py-2">
+                  Nenhum documento anexado. Recibo de faturamento, contrato, nota
+                  fiscal e planilha ficam aqui, separados do texto.
+                </p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-[color:var(--line-light)]">
+                  {documentos.map(a => (
+                    <li key={a.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
+                      <span className="text-[9px] font-mono font-semibold px-1.5 py-1 rounded shrink-0"
+                        style={{ background: "rgba(12,33,24,.07)", color: "var(--brand)" }}>
+                        {extensao(a.name)}
+                      </span>
+                      <button onClick={() => abrirDocumento(a)}
+                        className="text-[13px] text-left min-w-0 flex-1 truncate
+                                   hover:underline underline-offset-2"
+                        title={a.name}>
+                        {a.name}
+                      </button>
+                      <span className="text-[11px] opacity-40 shrink-0 hidden sm:inline tabular-nums">
+                        {fmtTamanho(a.size_bytes)}
+                      </span>
+                      <span className="text-[11px] opacity-30 shrink-0 hidden md:inline tabular-nums">
+                        {fmtData(a.created_at)}
+                      </span>
+                      {podeEditar && (confirmAnexo === a.id ? (
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <button className="text-[11px] font-semibold"
+                            style={{ color: "var(--bad)" }}
+                            onClick={() => removerDocumento(a)}>Remover</button>
+                          <button className="text-[11px] opacity-50"
+                            onClick={() => setConfirmAnexo(null)}>nao</button>
+                        </span>
+                      ) : (
+                        <button
+                          className="text-[11px] opacity-35 hover:opacity-100 shrink-0 px-1"
+                          onClick={() => setConfirmAnexo(a.id)}
+                          aria-label={`Remover ${a.name}`}>x</button>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionCard>
+          </div>
+
+          <input ref={anexoRef} type="file" className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) anexarDocumento(f);
+              e.target.value = "";
+            }} />
 
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e => {
