@@ -42,7 +42,9 @@ const fmtTamanho = (b: number | null) => {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-// Marcador curto no lugar de icone: le melhor e nao depende de imagem
+// Marcador curto no lugar de icone: le melhor e nao depende de imagem.
+// Sai do caminho guardado, nao do nome exibido, porque o nome pode ser
+// trocado por um rotulo sem extensao, tipo "Recibo de fevereiro".
 const extensao = (nome: string) => {
   const e = /\.([a-z0-9]{1,5})$/i.exec(nome);
   return e ? e[1].toUpperCase().slice(0, 4) : "ARQ";
@@ -125,6 +127,8 @@ export default function Relatorios() {
   // documentos guardados junto do relatorio, fora do texto
   const [anexos, setAnexos] = useState<ArquivoRow[]>([]);
   const [confirmAnexo, setConfirmAnexo] = useState<string | null>(null);
+  const [renomeando, setRenomeando] = useState<string | null>(null);
+  const [nomeDraft, setNomeDraft]   = useState("");
 
   const [criando, setCriando] = useState(false);
   const [arrastando, setArrastando] = useState(false);
@@ -412,6 +416,18 @@ export default function Relatorios() {
     setAnexos(lista => lista.filter(x => x.id !== a.id));
   }
 
+  // Print colado chega com nome automatico. Um recibo precisa de nome
+  // que diga o que e, senao a lista vira varias linhas iguais.
+  async function renomearDocumento(a: ArquivoRow) {
+    const novo = nomeDraft.trim();
+    setRenomeando(null);
+    if (!novo || novo === a.name) return;
+    const { error } = await supabase.from("report_files")
+      .update({ name: novo }).eq("id", a.id);
+    if (error) { setErro("Nao foi possivel renomear: " + error.message); return; }
+    setAnexos(lista => lista.map(x => x.id === a.id ? { ...x, name: novo } : x));
+  }
+
   // ── Documento aberto ─────────────────────────────────────────
   if (aberto) {
     const podeEditar = isStaff;
@@ -688,25 +704,42 @@ export default function Relatorios() {
               ) : (
                 <ul className="flex flex-col divide-y divide-[color:var(--line-light)]">
                   {documentos.map(a => (
-                    <li key={a.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
-                      <span className="text-[9px] font-mono font-semibold px-1.5 py-1 rounded shrink-0"
+                    <li key={a.id} className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0">
+                      <span className="text-[9px] font-mono font-semibold px-1.5 py-1 rounded shrink-0 mt-0.5"
                         style={{ background: "rgba(12,33,24,.07)", color: "var(--brand)" }}>
-                        {extensao(a.name)}
+                        {extensao(a.storage_path)}
                       </span>
-                      <button onClick={() => abrirDocumento(a)}
-                        className="text-[13px] text-left min-w-0 flex-1 truncate
-                                   hover:underline underline-offset-2"
-                        title={a.name}>
-                        {a.name}
-                      </button>
-                      <span className="text-[11px] opacity-40 shrink-0 hidden sm:inline tabular-nums">
-                        {fmtTamanho(a.size_bytes)}
-                      </span>
-                      <span className="text-[11px] opacity-30 shrink-0 hidden md:inline tabular-nums">
-                        {fmtData(a.created_at)}
-                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        {renomeando === a.id ? (
+                          <input
+                            autoFocus
+                            className="text-[13px] w-full bg-transparent border-b outline-none pb-0.5"
+                            style={{ borderColor: "var(--copper)" }}
+                            value={nomeDraft}
+                            onChange={e => setNomeDraft(e.target.value)}
+                            onBlur={() => renomearDocumento(a)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") renomearDocumento(a);
+                              if (e.key === "Escape") setRenomeando(null);
+                            }}
+                          />
+                        ) : (
+                          <button onClick={() => abrirDocumento(a)}
+                            className="text-[13px] text-left w-full truncate
+                                       hover:underline underline-offset-2"
+                            title={a.name}>
+                            {a.name}
+                          </button>
+                        )}
+                        <div className="text-[11px] opacity-40 tabular-nums mt-0.5">
+                          {[fmtTamanho(a.size_bytes), fmtData(a.created_at)]
+                            .filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+
                       {podeEditar && (confirmAnexo === a.id ? (
-                        <span className="flex items-center gap-1.5 shrink-0">
+                        <span className="flex items-center gap-1.5 shrink-0 mt-0.5">
                           <button className="text-[11px] font-semibold"
                             style={{ color: "var(--bad)" }}
                             onClick={() => removerDocumento(a)}>Remover</button>
@@ -714,10 +747,15 @@ export default function Relatorios() {
                             onClick={() => setConfirmAnexo(null)}>nao</button>
                         </span>
                       ) : (
-                        <button
-                          className="text-[11px] opacity-35 hover:opacity-100 shrink-0 px-1"
-                          onClick={() => setConfirmAnexo(a.id)}
-                          aria-label={`Remover ${a.name}`}>x</button>
+                        <span className="flex items-center gap-2 shrink-0 mt-0.5">
+                          <button className="text-[11px] opacity-40 hover:opacity-100"
+                            onClick={() => { setNomeDraft(a.name); setRenomeando(a.id); }}>
+                            renomear
+                          </button>
+                          <button className="text-[11px] opacity-35 hover:opacity-100 px-1"
+                            onClick={() => setConfirmAnexo(a.id)}
+                            aria-label={`Remover ${a.name}`}>x</button>
+                        </span>
                       ))}
                     </li>
                   ))}
