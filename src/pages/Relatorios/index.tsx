@@ -180,6 +180,56 @@ export default function Relatorios() {
     setAbertoId(null);
   }
 
+  // Colar imagem funciona em qualquer ponto do relatorio aberto,
+  // inclusive em modo leitura: o print vai direto da area de
+  // transferencia para o texto, sem precisar salvar arquivo antes.
+  useEffect(() => {
+    if (!abertoId || !isStaff) return;
+
+    const aoColar = (e: ClipboardEvent) => {
+      const itens = e.clipboardData?.items;
+      if (!itens) return;
+      for (const item of itens) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const arq = item.getAsFile();
+          if (arq) {
+            e.preventDefault();
+            if (!editando) { setCorpo(aberto?.content ?? ""); setEditando(true); }
+            enviarImagem(arq);
+          }
+          return;
+        }
+      }
+    };
+
+    const aoArrastar = (e: DragEvent) => {
+      if (e.dataTransfer?.types?.includes("Files")) { e.preventDefault(); setArrastando(true); }
+    };
+    const aoSair = (e: DragEvent) => {
+      if (e.relatedTarget === null) setArrastando(false);
+    };
+    const aoSoltar = (e: DragEvent) => {
+      const arq = [...(e.dataTransfer?.files ?? [])].find(f => f.type.startsWith("image/"));
+      e.preventDefault();
+      setArrastando(false);
+      if (!arq) return;
+      if (!editando) { setCorpo(aberto?.content ?? ""); setEditando(true); }
+      enviarImagem(arq);
+    };
+
+    window.addEventListener("paste", aoColar);
+    window.addEventListener("dragover", aoArrastar);
+    window.addEventListener("dragleave", aoSair);
+    window.addEventListener("drop", aoSoltar);
+    return () => {
+      window.removeEventListener("paste", aoColar);
+      window.removeEventListener("dragover", aoArrastar);
+      window.removeEventListener("dragleave", aoSair);
+      window.removeEventListener("drop", aoSoltar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abertoId, isStaff, editando, corpo, aberto?.content]);
+
   // sobe a imagem e insere a marcacao na posicao do cursor
   async function enviarImagem(file: File) {
     if (!aberto || !user) return;
@@ -210,9 +260,12 @@ export default function Relatorios() {
     }
 
     const marcacao = `\n![${file.name.replace(/\.[^.]+$/, "")}](anexo:${caminho})\n`;
+    // fora do editor o rascunho pode estar desatualizado; nesse caso
+    // o texto salvo e a fonte certa, senao o relatorio seria apagado
+    const base = editando ? corpo : (aberto.content ?? "");
     const area = areaRef.current;
-    const pos = area?.selectionStart ?? corpo.length;
-    const novo = corpo.slice(0, pos) + marcacao + corpo.slice(pos);
+    const pos = editando ? (area?.selectionStart ?? base.length) : base.length;
+    const novo = base.slice(0, pos) + marcacao + base.slice(pos);
     setCorpo(novo);
     await salvarCampos(aberto.id, { content: novo });
     setSubindo(false);
@@ -418,20 +471,7 @@ export default function Relatorios() {
                     value={corpo}
                     placeholder={MODELO}
                     onChange={e => setCorpo(e.target.value)}
-                    // colar imagem da area de transferencia
-                    onPaste={e => {
-                      const arq = [...e.clipboardData.files].find(f => f.type.startsWith("image/"));
-                      if (arq) { e.preventDefault(); enviarImagem(arq); }
-                    }}
                     // arrastar arquivo para dentro do texto
-                    onDragOver={e => { e.preventDefault(); setArrastando(true); }}
-                    onDragLeave={() => setArrastando(false)}
-                    onDrop={e => {
-                      e.preventDefault();
-                      setArrastando(false);
-                      const arq = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
-                      if (arq) enviarImagem(arq);
-                    }}
                   />
                   <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t hairline">
                     <Btn size="sm" onClick={salvarCorpo} disabled={salvando}>
