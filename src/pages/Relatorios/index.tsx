@@ -66,6 +66,26 @@ Escreva aqui a leitura geral do mes.
 - [ ] Acao para o proximo periodo
 `;
 
+// Descobre o endereco da imagem em uma colagem que nao trouxe o
+// arquivo. O Notion e parecidos mandam ora html com <img>, ora o
+// texto em markdown, ora so o endereco solto.
+function enderecoDaColagem(dados: DataTransfer): string | null {
+  const html = dados.getData("text/html");
+  const noHtml = html && /<img[^>]+src=["']([^"']+)["']/i.exec(html);
+  if (noHtml && /^https?:\/\//i.test(noHtml[1])) return noHtml[1];
+
+  const texto = (dados.getData("text/plain") || "").trim();
+  if (!texto || texto.includes("\n")) return null;
+
+  const markdown = /^!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)$/.exec(texto);
+  if (markdown) return markdown[1];
+
+  if (/^https?:\/\/\S+$/.test(texto) &&
+      /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|$)/i.test(texto)) return texto;
+
+  return null;
+}
+
 export default function Relatorios() {
   const { user } = useAuth();
   const { scopedClientId, authLoading, isStaff, adminClientId, setAdminClientId, adminClients } = useClientScope();
@@ -187,9 +207,11 @@ export default function Relatorios() {
     if (!abertoId || !isStaff) return;
 
     const aoColar = (e: ClipboardEvent) => {
-      const itens = e.clipboardData?.items;
-      if (!itens) return;
-      for (const item of itens) {
+      const dados = e.clipboardData;
+      if (!dados) return;
+
+      // 1. print de tela e arquivo copiado vem como arquivo
+      for (const item of dados.items) {
         if (item.kind === "file" && item.type.startsWith("image/")) {
           const arq = item.getAsFile();
           if (arq) {
@@ -200,6 +222,36 @@ export default function Relatorios() {
           return;
         }
       }
+
+      // 2. copiado de uma pagina, como o Notion, o arquivo nao vem
+      // junto: vem so o endereco, ora dentro de um trecho de html,
+      // ora como texto. Em ambos os casos precisamos buscar a imagem
+      // e guardar aqui, porque esses enderecos expiram em horas.
+      const endereco = enderecoDaColagem(dados);
+      if (!endereco) return;
+
+      e.preventDefault();
+      if (!editando) { setCorpo(aberto?.content ?? ""); setEditando(true); }
+      setSubindo(true);
+      setErro(null);
+
+      fetch(endereco)
+        .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+        .then(blob => {
+          if (!blob.type.startsWith("image/")) throw new Error("tipo inesperado");
+          const nome = (endereco.split("/").pop() ?? "imagem")
+            .split("?")[0].slice(0, 60) || "imagem.png";
+          return enviarImagem(new File([blob], nome, { type: blob.type }));
+        })
+        .catch(() => {
+          setSubindo(false);
+          setErro(
+            "O site de origem nao deixa o painel baixar essa imagem. " +
+            "Abra a imagem la, clique com o botao direito, escolha " +
+            "copiar imagem e cole de novo. Arrastar o arquivo para ca " +
+            "tambem funciona."
+          );
+        });
     };
 
     const aoArrastar = (e: DragEvent) => {
@@ -259,7 +311,9 @@ export default function Relatorios() {
       return;
     }
 
-    const marcacao = `\n![${file.name.replace(/\.[^.]+$/, "")}](anexo:${caminho})\n`;
+    // sem legenda: nomes automaticos como "image.png" nao dizem nada
+    // e so ocupariam espaco embaixo da imagem
+    const marcacao = `\n![](anexo:${caminho})\n`;
     // fora do editor o rascunho pode estar desatualizado; nesse caso
     // o texto salvo e a fonte certa, senao o relatorio seria apagado
     const base = editando ? corpo : (aberto.content ?? "");

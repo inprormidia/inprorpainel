@@ -62,6 +62,17 @@ function Imagem({ origem, legenda }: { origem: string; legenda?: string }) {
   );
 }
 
+// Nome automatico de arquivo colado nao serve de legenda: so ocupa
+// espaco embaixo da imagem. Legenda de verdade e a que a pessoa
+// escreveu.
+const LEGENDA_AUTOMATICA =
+  /^(image|imagem|unnamed|screenshot|captura[ _-]?de[ _-]?tela|colada|foto|img)[ _-]?\d*$/i;
+
+function legendaUtil(texto: string) {
+  const limpo = texto.trim();
+  return limpo && !LEGENDA_AUTOMATICA.test(limpo) ? limpo : undefined;
+}
+
 type Trecho = { tipo: "texto" | "negrito" | "codigo" | "link"; valor: string; href?: string };
 
 // Quebra uma linha nos trechos com formatacao
@@ -199,7 +210,7 @@ export default function TextoFormatado({ texto, onMarcar }: {
     // imagem sozinha na linha
     const img = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(t);
     if (img) {
-      blocos.push(<Imagem key={i} origem={img[2]} legenda={img[1] || undefined} />);
+      blocos.push(<Imagem key={i} origem={img[2]} legenda={legendaUtil(img[1])} />);
       return;
     }
 
