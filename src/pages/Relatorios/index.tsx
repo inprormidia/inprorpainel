@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import PageMeta from "../../components/common/PageMeta";
 import {
-  PageWrap, KpiCard, KpiGrid, SectionCard, Btn, EmptyState, Badge, CellPicker, MenuItem, MenuData,
+  PageWrap, KpiCard, KpiGrid, SectionCard, Btn, EmptyState, Badge, CellPicker, MenuItem, MenuData, cls,
 } from "../../components/ui/InprorComponents";
 import TextoFormatado from "../../components/ui/TextoFormatado";
 import { useAuth, useClientScope } from "../../context/AuthContext";
@@ -84,6 +84,7 @@ export default function Relatorios() {
   const [confirmDel, setConfirmDel] = useState(false);
 
   const [criando, setCriando] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
   const [depts, setDepts]     = useState<DeptLite[]>([]);
   // filtros da lista
   const [filtroDept, setFiltroDept] = useState<string>("todos");
@@ -408,11 +409,29 @@ export default function Relatorios() {
                 <>
                   <textarea
                     ref={areaRef}
-                    className="text-[13px] leading-relaxed font-mono bg-transparent w-full resize-none
-                               border-0 outline-none rounded p-1 -m-1 min-h-[420px]"
+                    className={cls(
+                      "text-[13px] leading-relaxed font-mono bg-transparent w-full resize-none",
+                      "border-0 outline-none rounded p-1 -m-1 min-h-[420px]",
+                      arrastando && "ring-2 ring-offset-2",
+                    )}
+                    style={arrastando ? { outline: "2px dashed var(--copper)", outlineOffset: 4 } : undefined}
                     value={corpo}
                     placeholder={MODELO}
                     onChange={e => setCorpo(e.target.value)}
+                    // colar imagem da area de transferencia
+                    onPaste={e => {
+                      const arq = [...e.clipboardData.files].find(f => f.type.startsWith("image/"));
+                      if (arq) { e.preventDefault(); enviarImagem(arq); }
+                    }}
+                    // arrastar arquivo para dentro do texto
+                    onDragOver={e => { e.preventDefault(); setArrastando(true); }}
+                    onDragLeave={() => setArrastando(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setArrastando(false);
+                      const arq = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
+                      if (arq) enviarImagem(arq);
+                    }}
                   />
                   <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t hairline">
                     <Btn size="sm" onClick={salvarCorpo} disabled={salvando}>
@@ -440,11 +459,22 @@ export default function Relatorios() {
                         Relatorio ainda sem conteudo.
                       </p>}
                   {podeEditar && (
-                    <button
-                      className="text-[12px] mt-3 opacity-0 group-hover:opacity-60 hover:!opacity-100 underline underline-offset-2"
-                      onClick={() => { setCorpo(aberto.content ?? ""); setEditando(true); }}>
-                      Editar relatorio
-                    </button>
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t hairline">
+                      <Btn size="sm" variant="ghost"
+                        onClick={() => { setCorpo(aberto.content ?? ""); setEditando(true); }}>
+                        Editar relatorio
+                      </Btn>
+                      {/* atalho: entra em edicao ja abrindo o seletor de arquivo */}
+                      <button
+                        className="text-[12px] px-2.5 py-1.5 rounded border hairline hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                        onClick={() => {
+                          setCorpo(aberto.content ?? "");
+                          setEditando(true);
+                          setTimeout(() => fileRef.current?.click(), 50);
+                        }}>
+                        Inserir imagem
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
