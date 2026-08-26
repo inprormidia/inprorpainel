@@ -15,6 +15,7 @@ import Social     from "./pages/Social";
 import Reputacao  from "./pages/Reputacao";
 import Cardapio   from "./pages/Cardapio";
 import Reunioes   from "./pages/Reunioes";
+import Calendario from "./pages/Calendario";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
 import Tarefas    from "./pages/Tarefas";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/relatorios"          element={<ModuleRoute module="relatorios"><Relatorios /></ModuleRoute>} />
           <Route path="/financeiro"          element={<ModuleRoute module="financeiro"><Financeiro /></ModuleRoute>} />
           <Route path="/reunioes"            element={<ModuleRoute module="reunioes"><Reunioes /></ModuleRoute>} />
+          <Route path="/calendario"          element={<ModuleRoute module="calendario"><Calendario /></ModuleRoute>} />
           <Route path="/equipe"              element={<AdminRoute><Equipe /></AdminRoute>} />
           <Route path="/clientes"            element={<AdminRoute><Clientes /></AdminRoute>} />
         </Route>

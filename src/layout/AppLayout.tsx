@@ -19,6 +19,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/relatorios":    "Relatorios",
   "/financeiro":    "Financeiro",
   "/reunioes":      "Reunioes",
+  "/calendario":    "Calendario",
 };
 
 const AppLayout: React.FC = () => {

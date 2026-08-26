@@ -47,6 +47,7 @@ const NAV_STAFF = [
       { path: "/relatorios", label: "Relatorios", icon: "≡", moduleKey: "relatorios", adminOnly: false },
       { path: "/financeiro", label: "Financeiro", icon: "$", moduleKey: "financeiro", adminOnly: true },
       { path: "/reunioes",   label: "Reunioes",   icon: "◐", moduleKey: "reunioes",   adminOnly: false },
+      { path: "/calendario", label: "Calendario", icon: "▦", moduleKey: "calendario", adminOnly: false },
     ],
   },
 ];
@@ -82,6 +83,7 @@ const NAV_CLIENT = [
       { path: "/relatorios", label: "Relatorios", icon: "≡", moduleKey: null },
       { path: "/financeiro", label: "Financeiro", icon: "$", moduleKey: null },
       { path: "/reunioes",   label: "Reunioes",   icon: "◐", moduleKey: null },
+      { path: "/calendario", label: "Calendario", icon: "▦", moduleKey: null },
     ],
   },
 ];
